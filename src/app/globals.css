@@ -1,0 +1,102 @@
+@import "tailwindcss";
+
+:root {
+  --bg:           #F5F6FA;
+  --surface:      #FFFFFF;
+  --surface2:     #F8F9FD;
+  --border:       #E4E7EF;
+  --border-light: #EEF0F7;
+  --text:         #111827;
+  --text-muted:   #6B7280;
+  --text-sub:     #9CA3AF;
+
+  /* 에듀윌 코어 컬러 */
+  --eduwill-navy: #1C2B5E;
+  --eduwill-blue: #2355C3;
+  --eduwill-yellow: #FFCB00;
+  --eduwill-yellow-dark: #E6B800;
+  --eduwill-yellow-light: #FFF8CC;
+
+  --accent:       var(--eduwill-blue);
+  --accent-hover: #1844A8;
+  --success:      #16A34A;
+  --warning:      #D97706;
+  --danger:       #DC2626;
+  --danger-light: #FEF2F2;
+}
+
+@theme inline {
+  --color-bg:      var(--bg);
+  --color-surface: var(--surface);
+  --color-border:  var(--border);
+  --color-text:    var(--text);
+  --color-muted:   var(--text-muted);
+  --color-accent:  var(--accent);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger:  var(--danger);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: var(--border-light); }
+::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
+
+/* 에듀윌 버튼 스타일 */
+.btn-primary {
+  background: var(--eduwill-blue);
+  color: #fff;
+  border-radius: 8px;
+  font-weight: 600;
+  transition: background 0.15s;
+}
+.btn-primary:hover { background: var(--accent-hover); }
+
+.btn-yellow {
+  background: var(--eduwill-yellow);
+  color: var(--eduwill-navy);
+  border-radius: 8px;
+  font-weight: 700;
+  transition: background 0.15s;
+}
+.btn-yellow:hover { background: var(--eduwill-yellow-dark); }
+
+/* 카드 기본 */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+}
+
+/* 에듀윌 배지 */
+.badge-yellow {
+  background: var(--eduwill-yellow-light);
+  color: #92400E;
+  border: 1px solid #FDE68A;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+}
+
+.badge-blue {
+  background: #EFF6FF;
+  color: var(--eduwill-blue);
+  border: 1px solid #BFDBFE;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+}
+
+/* 테이블 */
+table { border-collapse: collapse; }
