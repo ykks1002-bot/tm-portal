@@ -26,10 +26,19 @@ const COURSE_COMPETITOR: Record<string, string> = {
 const CATEGORY_ORDER = ["전문자격", "공무원", "기술자격", "학력인증"];
 
 function PromotionBanner({ promos }: { promos: Promotion[] }) {
-  const [idx, setIdx] = useState(0);
+  const [idx, setIdx]       = useState(0);
+  const [visible, setVisible] = useState(true);
+
   useEffect(() => {
     if (promos.length <= 1) return;
-    const t = setInterval(() => setIdx(i => (i + 1) % promos.length), 4000);
+    // 2초마다 페이드 아웃 → 다음 항목 → 페이드 인
+    const t = setInterval(() => {
+      setVisible(false);
+      setTimeout(() => {
+        setIdx(i => (i + 1) % promos.length);
+        setVisible(true);
+      }, 300);
+    }, 2000);
     return () => clearInterval(t);
   }, [promos.length]);
 
@@ -40,23 +49,42 @@ function PromotionBanner({ promos }: { promos: Promotion[] }) {
     : null;
 
   return (
-    <div className="flex items-center justify-between gap-4 mb-6 px-5 py-3 rounded-xl"
-         style={{ background: "var(--eduwill-navy)", color: "#fff" }}>
-      <div className="flex items-center gap-3">
-        <span className="text-base">📢</span>
-        <div>
-          <span className="font-bold text-sm" style={{ color: "var(--eduwill-yellow)" }}>{p.title}</span>
+    <div className="flex items-center justify-between gap-4 mb-6 px-5 py-3 rounded-xl overflow-hidden"
+         style={{ background: "var(--eduwill-navy)", color: "#fff", minHeight: 48 }}>
+      <div className="flex items-center gap-3 flex-1 min-w-0"
+           style={{ opacity: visible ? 1 : 0, transition: "opacity 0.3s ease" }}>
+        <span className="text-base shrink-0">📢</span>
+        <div className="min-w-0">
+          <span className="font-bold text-sm" style={{ color: "var(--eduwill-yellow)" }}>
+            {p.title}
+          </span>
           {p.content && (
-            <span className="text-xs ml-2" style={{ color: "rgba(255,255,255,0.7)" }}>{p.content}</span>
+            <span className="text-xs ml-2 hidden sm:inline"
+                  style={{ color: "rgba(255,255,255,0.7)" }}>
+              {p.content}
+            </span>
           )}
         </div>
       </div>
-      {remaining !== null && (
-        <span className="text-xs font-bold px-2.5 py-1 rounded-full shrink-0"
-              style={{ background: "var(--eduwill-yellow)", color: "var(--eduwill-navy)" }}>
-          D-{remaining}
-        </span>
-      )}
+      <div className="flex items-center gap-2 shrink-0">
+        {/* 페이지 인디케이터 */}
+        <div className="hidden sm:flex gap-1">
+          {promos.map((_, i) => (
+            <button key={i} onClick={() => setIdx(i)}
+                    className="rounded-full transition-all"
+                    style={{
+                      width: i === idx ? 16 : 6, height: 6,
+                      background: i === idx ? "var(--eduwill-yellow)" : "rgba(255,255,255,0.3)",
+                    }} />
+          ))}
+        </div>
+        {remaining !== null && remaining <= 30 && (
+          <span className="text-xs font-bold px-2.5 py-1 rounded-full"
+                style={{ background: "var(--eduwill-yellow)", color: "var(--eduwill-navy)" }}>
+            D-{remaining}
+          </span>
+        )}
+      </div>
     </div>
   );
 }
