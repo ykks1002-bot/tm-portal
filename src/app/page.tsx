@@ -21,6 +21,7 @@ const COURSE_COMPETITOR: Record<string, string> = {
   "전기기사":      "다산에듀",
   "소방설비기사":  "모아바",
   "9급공무원":     "공단기",
+  "손해평가사":    "에듀야·박문각",
 };
 
 const CATEGORY_ORDER = ["전문자격", "공무원", "기술자격", "학력인증"];
