@@ -26,7 +26,7 @@ const CATEGORY_COLOR: Record<string, { bg: string; text: string; border: string 
 const COURSE_COMPETITOR: Record<string, string> = {
   "공인중개사":    "메가랜드·박문각",
   "주택관리사":    "해커스",
-  "사회복지사1급": "아이패스",
+  "사회복지사1급": "해커스·박문각",
   "행정사":        "합격의법학원",
   "경비지도사":    "시대에듀",
   "검정고시":      "검스타트(EBS)",
