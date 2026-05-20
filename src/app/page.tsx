@@ -81,7 +81,7 @@ function ExamBanner({ entries }: { entries: BannerEntry[] }) {
     const t = setInterval(() => {
       setVisible(false);
       setTimeout(() => { setIdx(i => (i + 1) % entries.length); setVisible(true); }, 280);
-    }, 2000);
+    }, 5000);
     return () => clearInterval(t);
   }, [entries.length]);
 
