@@ -66,14 +66,27 @@ async function get<T>(path: string): Promise<T> {
   return isStatic() ? staticRequest<T>(path) : request<T>(path);
 }
 
+// ── 정적 모드 로그인 (백엔드 없이 .env.local 비밀번호로 인증) ─────────────────
+function staticLogin(email: string, password: string) {
+  const expected = process.env.NEXT_PUBLIC_STATIC_PASSWORD ?? "eduwill2026!";
+  if (password !== expected) return Promise.reject(new Error("비밀번호가 올바르지 않습니다"));
+  return Promise.resolve({
+    access_token: "static-local",
+    user_name: email.split("@")[0],
+    user_role: "agent",
+  });
+}
+
 // ── 공개 API ─────────────────────────────────────────────────────────────────
 export const api = {
-  // Auth (로컬 전용)
+  // Auth
   login: (email: string, password: string) =>
-    request<{ access_token: string; user_name: string; user_role: string }>(
-      "/api/auth/login",
-      { method: "POST", body: JSON.stringify({ email, password }) }
-    ),
+    isStatic()
+      ? staticLogin(email, password)
+      : request<{ access_token: string; user_name: string; user_role: string }>(
+          "/api/auth/login",
+          { method: "POST", body: JSON.stringify({ email, password }) }
+        ),
   me: () => request<{ id: number; email: string; name: string; role: string }>("/api/auth/me"),
 
   // Courses
