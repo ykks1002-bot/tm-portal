@@ -10,7 +10,7 @@ interface CompSummary { id: number; name: string; products: CompProduct[] }
 
 interface SearchHit {
   courseId: number; courseName: string; courseIcon: string;
-  competitorName: string; productName: string; price: string; weakPoints: string[];
+  competitorId: number; competitorName: string; productName: string; price: string; weakPoints: string[];
 }
 
 // ── 상수 ──────────────────────────────────────────────────────────────────────
@@ -180,7 +180,7 @@ function CompetitorCard({
         <Link href={`/courses/${courseId}?competitor=${summary.id}`}
               className="flex-1 text-center text-xs py-2 rounded-xl font-bold"
               style={{ background: "var(--eduwill-yellow)", color: "var(--eduwill-navy)" }}>
-          전체 비교표
+          {summary.name} 비교표
         </Link>
       </div>
     </div>
@@ -300,10 +300,10 @@ function SearchResultCard({ hit }: { hit: SearchHit }) {
             ))}
           </ul>
         )}
-        <Link href={`/courses/${hit.courseId}`}
+        <Link href={`/courses/${hit.courseId}?competitor=${hit.competitorId}`}
               className="inline-flex items-center gap-1 text-xs font-bold"
               style={{ color: "var(--eduwill-blue)" }}>
-          상세 비교표 보기
+          {hit.competitorName} 비교표
           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
           </svg>
@@ -392,7 +392,7 @@ export default function ConsultPage() {
             const { productName, price, weakPoints } = parseCompVal(raw);
             hits.push({
               courseId: cid, courseName: course.name, courseIcon: course.icon,
-              competitorName: competitor.name, productName, price,
+              competitorId: competitor.id, competitorName: competitor.name, productName, price,
               weakPoints: weakPoints.slice(0, 3),
             });
             seen.add(key);
