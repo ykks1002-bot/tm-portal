@@ -463,6 +463,11 @@ export default function CoursePage({ params }: { params: Promise<{ id: string }>
           </span>
 
           <div className="ml-auto flex items-center gap-2">
+            <Link href="/consult"
+                  className="text-xs px-3 py-1.5 rounded-lg font-bold"
+                  style={{ background: "var(--eduwill-yellow)", color: "var(--eduwill-navy)" }}>
+              💬 상담 도우미
+            </Link>
             <button onClick={() => loadData(true)} disabled={refreshing}
                     className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-bold transition disabled:opacity-60"
                     style={{ background: "var(--eduwill-yellow)", color: "var(--eduwill-navy)" }}>

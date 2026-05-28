@@ -180,9 +180,14 @@ function Navbar({ onRefresh, refreshing }: { onRefresh: () => void; refreshing: 
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <Link href="/consult"
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-bold transition"
+                style={{ background: "var(--eduwill-yellow)", color: "var(--eduwill-navy)" }}>
+            💬 상담 도우미
+          </Link>
           <button onClick={onRefresh} disabled={refreshing}
                   className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-semibold transition disabled:opacity-60"
-                  style={{ background: "var(--eduwill-yellow)", color: "var(--eduwill-navy)" }}>
+                  style={{ background: "rgba(255,255,255,0.15)", color: "#fff" }}>
             <svg xmlns="http://www.w3.org/2000/svg"
                  className={`w-3.5 h-3.5 ${refreshing ? "animate-spin" : ""}`}
                  fill="none" viewBox="0 0 24 24" stroke="currentColor">
