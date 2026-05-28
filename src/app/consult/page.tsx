@@ -569,12 +569,11 @@ export default function ConsultPage() {
               <p className="text-xs font-bold mb-2.5" style={{ color: "var(--text-muted)" }}>
                 과목 선택
               </p>
-              <div className="flex gap-2 overflow-x-auto pb-1"
-                   style={{ msOverflowStyle: "none", scrollbarWidth: "none" }}>
+              <div className="flex flex-wrap gap-1.5">
                 {courses.map(c => (
                   <button key={c.id}
                           onClick={() => setSelectedId(c.id)}
-                          className="shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold transition"
+                          className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold transition"
                           style={{
                             background: selectedId === c.id ? "var(--eduwill-navy)" : "var(--surface)",
                             color:      selectedId === c.id ? "white" : "var(--text-muted)",
