@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, use, useCallback } from "react";
+import { useEffect, useState, use, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -424,14 +424,19 @@ function EmptyState({ message }: { message: string }) {
 }
 
 // ── 메인 ──────────────────────────────────────────────────────────────────────
-export default function CoursePage({ params }: { params: Promise<{ id: string }> }) {
+function CoursePageInner({ params }: { params: Promise<{ id: string }> }) {
   const { id }      = use(params);
   const router      = useRouter();
   const searchParams = useSearchParams();
   const courseId    = parseInt(id);
 
-  const initCompetitor = searchParams ? parseInt(searchParams.get("competitor") ?? "") || null : null;
-  const [filterCompetitorId, setFilterCompetitorId] = useState<number | null>(initCompetitor);
+  const [filterCompetitorId, setFilterCompetitorId] = useState<number | null>(null);
+
+  // useSearchParams는 Suspense 내에서만 안전하게 읽힘 → useEffect로 동기화
+  useEffect(() => {
+    const param = searchParams?.get("competitor");
+    setFilterCompetitorId(param ? parseInt(param) || null : null);
+  }, [searchParams]);
 
   const [tab, setTab]               = useState<Tab>("comparison");
   const [comparison, setComparison] = useState<ComparisonResponse | null>(null);
@@ -556,5 +561,14 @@ export default function CoursePage({ params }: { params: Promise<{ id: string }>
         {tab === "faq"        && <FAQTab faqs={faqs} />}
       </main>
     </div>
+  );
+}
+
+// useSearchParams 사용 시 정적 빌드에서 Suspense 필수
+export default function CoursePage({ params }: { params: Promise<{ id: string }> }) {
+  return (
+    <Suspense>
+      <CoursePageInner params={params} />
+    </Suspense>
   );
 }
