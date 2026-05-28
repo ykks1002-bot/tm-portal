@@ -177,7 +177,7 @@ function CompetitorCard({
       {/* 하단 버튼 */}
       <div className="px-4 py-2.5 flex gap-2"
            style={{ borderTop: "1px solid var(--border)", background: "var(--surface2)" }}>
-        <Link href={`/courses/${courseId}`}
+        <Link href={`/courses/${courseId}?competitor=${summary.id}`}
               className="flex-1 text-center text-xs py-2 rounded-xl font-bold"
               style={{ background: "var(--eduwill-yellow)", color: "var(--eduwill-navy)" }}>
           전체 비교표

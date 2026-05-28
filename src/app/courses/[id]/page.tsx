@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, use, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
   api,
@@ -154,8 +154,22 @@ function ProductCompareCard({
 }
 
 // ── 비교표 탭 ─────────────────────────────────────────────────────────────────
-function ComparisonTable({ data }: { data: ComparisonResponse }) {
+function ComparisonTable({
+  data,
+  filterCompetitorId,
+  onClearFilter,
+}: {
+  data: ComparisonResponse;
+  filterCompetitorId?: number;
+  onClearFilter?: () => void;
+}) {
   const hasProducts = data.items.some(i => i.eduwill_value);
+  const competitors = filterCompetitorId
+    ? data.competitors.filter(c => c.id === filterCompetitorId)
+    : data.competitors;
+  const filteredName = filterCompetitorId
+    ? data.competitors.find(c => c.id === filterCompetitorId)?.name
+    : null;
 
   if (!hasProducts) {
     return <EmptyState message="상품 비교 데이터가 없습니다. 관리자 페이지에서 추가해주세요." />;
@@ -163,6 +177,21 @@ function ComparisonTable({ data }: { data: ComparisonResponse }) {
 
   return (
     <div className="space-y-4">
+      {/* 경쟁사 필터 배너 */}
+      {filteredName && (
+        <div className="flex items-center justify-between px-4 py-2.5 rounded-xl"
+             style={{ background: "#FEF2F2", border: "1.5px solid #FECACA" }}>
+          <span className="text-sm font-semibold" style={{ color: "#B91C1C" }}>
+            <span className="font-bold">{filteredName}</span> 비교만 표시 중
+          </span>
+          <button onClick={onClearFilter}
+                  className="text-xs font-bold px-3 py-1.5 rounded-lg"
+                  style={{ background: "white", color: "#B91C1C", border: "1px solid #FECACA" }}>
+            전체 경쟁사 보기
+          </button>
+        </div>
+      )}
+
       {/* 범례 */}
       <div className="flex items-center gap-4 text-xs px-1" style={{ color: "var(--text-muted)" }}>
         <span className="flex items-center gap-1">
@@ -177,7 +206,7 @@ function ComparisonTable({ data }: { data: ComparisonResponse }) {
       </div>
 
       {data.items.map(item => (
-        <ProductCompareCard key={item.id} item={item} competitors={data.competitors} />
+        <ProductCompareCard key={item.id} item={item} competitors={competitors} />
       ))}
     </div>
   );
@@ -396,9 +425,13 @@ function EmptyState({ message }: { message: string }) {
 
 // ── 메인 ──────────────────────────────────────────────────────────────────────
 export default function CoursePage({ params }: { params: Promise<{ id: string }> }) {
-  const { id }   = use(params);
-  const router   = useRouter();
-  const courseId = parseInt(id);
+  const { id }      = use(params);
+  const router      = useRouter();
+  const searchParams = useSearchParams();
+  const courseId    = parseInt(id);
+
+  const initCompetitor = searchParams ? parseInt(searchParams.get("competitor") ?? "") || null : null;
+  const [filterCompetitorId, setFilterCompetitorId] = useState<number | null>(initCompetitor);
 
   const [tab, setTab]               = useState<Tab>("comparison");
   const [comparison, setComparison] = useState<ComparisonResponse | null>(null);
@@ -511,7 +544,13 @@ export default function CoursePage({ params }: { params: Promise<{ id: string }>
 
       {/* 본문 */}
       <main className="max-w-6xl mx-auto px-6 py-6">
-        {tab === "comparison" && <ComparisonTable data={comparison} />}
+        {tab === "comparison" && (
+          <ComparisonTable
+            data={comparison}
+            filterCompetitorId={filterCompetitorId ?? undefined}
+            onClearFilter={() => setFilterCompetitorId(null)}
+          />
+        )}
         {tab === "strengths"  && <StrengthsTab strengths={strengths} />}
         {tab === "scripts"    && <ScriptsTab scripts={scripts} />}
         {tab === "faq"        && <FAQTab faqs={faqs} />}
