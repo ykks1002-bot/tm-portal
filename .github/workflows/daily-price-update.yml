@@ -1,4 +1,4 @@
-name: Daily Competitor Price Update
+name: Daily Price Update (에듀윌 + 경쟁사)
 
 on:
   schedule:
@@ -30,11 +30,14 @@ jobs:
           python-version: '3.11'
           cache: pip
 
-      - name: Install dependencies
+      - name: Install Python dependencies
         run: |
-          pip install requests beautifulsoup4 urllib3
+          pip install requests beautifulsoup4 urllib3 playwright
 
-      - name: Scrape competitor prices
+      - name: Install Playwright Chromium
+        run: playwright install chromium --with-deps
+
+      - name: Scrape 에듀윌 + 경쟁사 prices
         run: python scripts/scrape_prices_ci.py
         continue-on-error: true
 
