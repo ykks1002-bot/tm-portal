@@ -76,7 +76,7 @@ ${ci.advantages.slice(0,4).map(a => `• ${a}`).join("\n")}
 
 async function genWithGemini(key: string, prompt: string): Promise<string> {
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`,
     {
       method: "POST",
       headers: { "content-type": "application/json" },
