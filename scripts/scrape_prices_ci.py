@@ -80,14 +80,19 @@ def fetch(url, timeout=12):
     return None
 
 
+def _is_valid_price(n: int) -> bool:
+    """실제 수강료로 유효한 가격인지 검증 (천원 단위 정수여야 함)"""
+    return n % 1_000 == 0
+
+
 def extract_prices(text, min_v=50_000, max_v=5_000_000):
-    """텍스트 전체에서 가격 패턴 추출 → 빈도순"""
+    """텍스트 전체에서 가격 패턴 추출 → 빈도순 (천원 단위 정수만)"""
     if not text:
         return []
     nums = {}
     for m in re.finditer(r"(\d{1,3}(?:,\d{3})+)", text):
         n = int(m.group().replace(",", ""))
-        if min_v <= n <= max_v:
+        if min_v <= n <= max_v and _is_valid_price(n):
             nums[n] = nums.get(n, 0) + 1
     return [f"{n:,}원" for n, _ in sorted(nums.items(), key=lambda x: -x[1])[:5]]
 
@@ -98,7 +103,7 @@ def first_price(html, min_v=50_000, max_v=5_000_000):
 
 
 def find_price_near(text, keywords, min_v=100_000, max_v=5_000_000, window=500):
-    """키워드 근처 window 글자 안에서 가장 자주 등장하는 가격 반환"""
+    """키워드 근처 window 글자 안에서 가장 자주 등장하는 유효 가격 반환"""
     if not text:
         return None
     for kw in keywords:
@@ -109,7 +114,7 @@ def find_price_near(text, keywords, min_v=100_000, max_v=5_000_000, window=500):
         nums = {}
         for m in re.finditer(r"(\d{1,3}(?:,\d{3})+)", ctx):
             n = int(m.group().replace(",", ""))
-            if min_v <= n <= max_v:
+            if min_v <= n <= max_v and _is_valid_price(n):
                 nums[n] = nums.get(n, 0) + 1
         if nums:
             best = max(nums.items(), key=lambda x: x[1])[0]
@@ -129,7 +134,7 @@ def find_price_with_original(text, keywords, min_v=100_000, max_v=5_000_000, win
         found = []
         for m in re.finditer(r"(\d{1,3}(?:,\d{3})+)", ctx):
             n = int(m.group().replace(",", ""))
-            if min_v <= n <= max_v:
+            if min_v <= n <= max_v and _is_valid_price(n):
                 found.append(n)
         if not found:
             continue
