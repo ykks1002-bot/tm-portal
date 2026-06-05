@@ -1,422 +1,295 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
-import { api, type Course, type ComparisonResponse, type Script } from "@/lib/api";
+import { api, type Course, type ComparisonResponse } from "@/lib/api";
 
 // ── 타입 ──────────────────────────────────────────────────────────────────────
-interface CompProduct { itemName: string; productName: string; price: string; weakPoints: string[] }
-interface CompSummary { id: number; name: string; products: CompProduct[] }
+interface CompetitorProduct { name: string; price: string }
+interface CompetitorInfo {
+  id: number;
+  name: string;
+  products: CompetitorProduct[];
+  advantages: string[]; // 에듀윌 우위 포인트
+}
+interface EduwillProduct { name: string; price: string; features: string[] }
 
-interface SearchHit {
-  courseId: number; courseName: string; courseIcon: string;
-  competitorId: number; competitorName: string; productName: string; price: string; weakPoints: string[];
+const SITUATIONS = [
+  { key: "타사비교", label: "타사 비교 중", icon: "⚔️" },
+  { key: "가격이의", label: "가격 이의",    icon: "💸" },
+  { key: "첫상담",   label: "첫 상담",      icon: "👋" },
+  { key: "재상담",   label: "재상담",       icon: "🔄" },
+];
+
+// ── 데이터 추출 유틸 ──────────────────────────────────────────────────────────
+function parseEduwillProducts(comp: ComparisonResponse): EduwillProduct[] {
+  return comp.items
+    .filter(item => item.eduwill_value)
+    .map(item => {
+      const lines = (item.eduwill_value || "").split("\n").filter(Boolean);
+      const features = lines
+        .filter(l => l.startsWith("✅") || l.startsWith("★") || l.startsWith("🔥"))
+        .map(l => l.replace(/^[✅★🔥]\s*/, "").trim());
+      return {
+        name:     item.name,
+        price:    item.description || "가격 문의",
+        features,
+      };
+    });
 }
 
-// ── 상수 ──────────────────────────────────────────────────────────────────────
-const SIT: Record<string, { label: string; bg: string; text: string; border: string; icon: string }> = {
-  타사비교: { label: "타사 비교 중", bg: "#FEF2F2", text: "#B91C1C", border: "#FECACA", icon: "⚔️" },
-  가격이의: { label: "가격 이의",   bg: "#FFFBEB", text: "#92400E", border: "#FDE68A", icon: "💸" },
-  첫상담:   { label: "첫 상담",     bg: "#EFF6FF", text: "#1D4ED8", border: "#BFDBFE", icon: "👋" },
-  재상담:   { label: "재상담",      bg: "#F0FDF4", text: "#166534", border: "#BBF7D0", icon: "🔄" },
-};
+function parseCompetitorInfo(comp: ComparisonResponse, competitorId: number): CompetitorInfo | null {
+  const competitor = comp.competitors.find(c => c.id === competitorId);
+  if (!competitor) return null;
 
-// ── 유틸 ─────────────────────────────────────────────────────────────────────
-function parseCompVal(raw: string): { productName: string; price: string; weakPoints: string[] } {
-  const lines = raw.split("\n").filter(Boolean);
-  return {
-    productName: lines[0] || "",
-    price:       lines[1] || "가격 문의",
-    weakPoints:  lines.slice(2).filter(l => l.startsWith("❌") || l.startsWith("⚠️")),
-  };
-}
+  const cid = String(competitorId);
+  const seenProds = new Set<string>();
+  const seenAdvs  = new Set<string>();
+  const products:   CompetitorProduct[] = [];
+  const advantages: string[]            = [];
 
-function buildSummaries(comp: ComparisonResponse): CompSummary[] {
-  const map = new Map<number, CompSummary>();
-  for (const competitor of comp.competitors) {
-    const products: CompProduct[] = [];
-    for (const item of comp.items) {
-      const raw = item.competitor_values[String(competitor.id)] || "";
-      if (!raw || raw.startsWith("해당 상품 없음")) continue;
-      const { productName, price, weakPoints } = parseCompVal(raw);
-      products.push({ itemName: item.name, productName, price, weakPoints });
+  for (const item of comp.items) {
+    const raw = item.competitor_values[cid] || "";
+    if (!raw || raw.startsWith("해당 상품 없음")) continue;
+    const lines = raw.split("\n").filter(Boolean);
+
+    // 상품 추출 (중복 제거)
+    const prodName  = lines[0] || "";
+    const prodPrice = lines[1] || "가격 문의";
+    if (prodName && !seenProds.has(prodName)) {
+      seenProds.add(prodName);
+      products.push({ name: prodName, price: prodPrice });
     }
-    if (products.length) map.set(competitor.id, { id: competitor.id, name: competitor.name, products });
+
+    // 에듀윌 우위(경쟁사 약점) 수집
+    for (const line of lines.slice(2)) {
+      const clean = line.trim();
+      if ((clean.startsWith("❌") || clean.startsWith("⚠️")) && !seenAdvs.has(clean)) {
+        seenAdvs.add(clean);
+        advantages.push(clean);
+      }
+    }
   }
-  return Array.from(map.values());
+
+  return { id: competitorId, name: competitor.name, products, advantages };
 }
 
-// ── 경쟁사 카드 ───────────────────────────────────────────────────────────────
-function CompetitorCard({
-  summary, courseId, scripts, isExpanded, onToggle,
-}: {
-  summary: CompSummary;
-  courseId: number;
-  scripts: Script[];
-  isExpanded: boolean;
-  onToggle: () => void;
-}) {
-  const [copied, setCopied] = useState<number | null>(null);
+// ── Claude API 스크립트 생성 ───────────────────────────────────────────────────
+const ANTHROPIC_ENDPOINT = "https://api.anthropic.com/v1/messages";
 
-  const copyScript = async (s: Script) => {
-    await navigator.clipboard.writeText(s.body_template);
-    setCopied(s.id);
-    api.recordScriptUse(s.id).catch(() => {});
-    setTimeout(() => setCopied(null), 2000);
+async function generateScript(
+  apiKey: string,
+  courseName: string,
+  situation: string,
+  eduwillProducts: EduwillProduct[],
+  competitorInfo: CompetitorInfo
+): Promise<string> {
+  const eduwillDesc = eduwillProducts
+    .map(p => `• ${p.name} (${p.price})${p.features.length ? " — " + p.features.slice(0,3).join(", ") : ""}`)
+    .join("\n");
+
+  const compDesc = competitorInfo.products
+    .map(p => `• ${p.name}: ${p.price}`)
+    .join("\n");
+
+  const advDesc = competitorInfo.advantages.slice(0, 5)
+    .map(a => a.replace(/^[❌⚠️]\s*/, ""))
+    .join("\n• ");
+
+  const situationLabel: Record<string, string> = {
+    타사비교: "고객이 경쟁사와 비교 중",
+    가격이의: "고객이 가격이 비싸다고 이의 제기",
+    첫상담:   "첫 번째 상담 전화",
+    재상담:   "이전 상담 고객 재연결",
   };
 
-  const compScripts = scripts.filter(s => s.situation_tag === "타사비교").slice(0, 2);
+  const prompt = `당신은 에듀윌 TM 상담사를 돕는 전문 상담 코치입니다. 아래 정보를 바탕으로 상담사가 고객과의 통화에서 바로 읽을 수 있는 자연스럽고 설득력 있는 상담 스크립트를 작성하세요.
 
+## 상황
+- 과목: ${courseName}
+- 상담 상황: ${situationLabel[situation] || situation}
+- 언급된 경쟁사: ${competitorInfo.name}
+
+## 에듀윌 상품
+${eduwillDesc}
+
+## ${competitorInfo.name} 상품
+${compDesc}
+
+## 에듀윌 차별점 (경쟁사 대비)
+• ${advDesc}
+
+## 작성 조건
+- 상담사가 고객에게 직접 말하는 형태 (1인칭 대화체)
+- 경쟁사를 직접 비방하지 않고 에듀윌 강점을 자연스럽게 부각
+- 친근하고 전문적인 어조
+- 3~4문장, 간결하게
+- 한국어로 작성`;
+
+  const res = await fetch(ANTHROPIC_ENDPOINT, {
+    method: "POST",
+    headers: {
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+      "anthropic-dangerous-direct-browser-access": "true",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 600,
+      messages: [{ role: "user", content: prompt }],
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { error?: { message?: string } }).error?.message || `API 오류 (${res.status})`);
+  }
+  const data = await res.json() as { content: { type: string; text: string }[] };
+  return data.content.find(c => c.type === "text")?.text || "";
+}
+
+// ── API 키 모달 ───────────────────────────────────────────────────────────────
+function ApiKeyModal({ onSave }: { onSave: (key: string) => void }) {
+  const [val, setVal] = useState("");
   return (
-    <div className="rounded-2xl overflow-hidden transition-shadow"
-         style={{
-           background: "var(--surface)",
-           border: `1.5px solid ${isExpanded ? "var(--eduwill-navy)" : "var(--border)"}`,
-           boxShadow: isExpanded ? "0 4px 16px rgba(28,43,94,0.12)" : "0 1px 4px rgba(0,0,0,0.06)",
-         }}>
-
-      {/* 경쟁사명 헤더 */}
-      <button className="w-full px-4 py-3 flex items-center justify-between gap-2 text-left"
-              onClick={onToggle}
-              style={{ background: isExpanded ? "var(--eduwill-navy)" : "var(--surface2)" }}>
-        <span className={`text-sm font-bold ${isExpanded ? "text-white" : ""}`}
-              style={{ color: isExpanded ? "white" : "var(--eduwill-navy)" }}>
-          {summary.name}
-        </span>
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-medium"
-                style={{ color: isExpanded ? "rgba(255,255,255,0.6)" : "var(--text-muted)" }}>
-            {isExpanded ? "스크립트 열림" : "스크립트 보기"}
-          </span>
-          <svg className="w-4 h-4 transition-transform duration-200"
-               style={{ color: isExpanded ? "var(--eduwill-yellow)" : "var(--text-muted)",
-                        transform: isExpanded ? "rotate(180deg)" : "none" }}
-               fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
-          </svg>
+    <div className="fixed inset-0 z-50 flex items-center justify-center"
+         style={{ background: "rgba(0,0,0,0.55)" }}>
+      <div className="rounded-2xl p-8 max-w-md w-full mx-4"
+           style={{ background: "var(--surface)", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
+        <div className="text-2xl mb-2">🔑</div>
+        <h2 className="font-bold text-lg mb-1" style={{ color: "var(--eduwill-navy)" }}>
+          Claude API 키 설정
+        </h2>
+        <p className="text-xs mb-4" style={{ color: "var(--text-muted)" }}>
+          AI 상담 스크립트 생성에 Claude API 키가 필요합니다.
+          키는 이 브라우저에만 저장되며 서버로 전송되지 않습니다.
+        </p>
+        <input
+          type="password"
+          placeholder="sk-ant-..."
+          value={val}
+          onChange={e => setVal(e.target.value)}
+          className="w-full px-4 py-3 rounded-xl text-sm mb-4 outline-none"
+          style={{ border: "1.5px solid var(--border)", background: "var(--surface2)", color: "var(--text)" }}
+        />
+        <div className="flex gap-2">
+          <button
+            onClick={() => { if (val.startsWith("sk-ant-")) onSave(val); }}
+            disabled={!val.startsWith("sk-ant-")}
+            className="flex-1 py-2.5 rounded-xl text-sm font-bold transition disabled:opacity-40"
+            style={{ background: "var(--eduwill-yellow)", color: "var(--eduwill-navy)" }}>
+            저장
+          </button>
+          <button onClick={() => onSave("")}
+                  className="px-5 py-2.5 rounded-xl text-sm font-bold"
+                  style={{ background: "var(--surface2)", color: "var(--text-muted)" }}>
+            건너뛰기
+          </button>
         </div>
-      </button>
-
-      {/* 상품 목록 */}
-      <div className="px-4 pt-3 pb-2">
-        {summary.products.map((p, pi) => (
-          <div key={pi} className={pi > 0 ? "mt-3 pt-3" : ""}
-               style={pi > 0 ? { borderTop: "1px dashed var(--border)" } : {}}>
-            <div className="flex items-start justify-between gap-2 mb-1.5">
-              <span className="text-sm font-semibold leading-snug"
-                    style={{ color: "var(--text)" }}>
-                {p.productName || "상품명 미확인"}
-              </span>
-              <span className="shrink-0 text-xs font-bold px-2.5 py-1 rounded-full"
-                    style={{
-                      background: p.price === "가격 문의" ? "#F3F4F6" : "#FEF2F2",
-                      color:      p.price === "가격 문의" ? "#9CA3AF"  : "#DC2626",
-                    }}>
-                {p.price}
-              </span>
-            </div>
-            {p.weakPoints.length > 0 && (
-              <ul className="space-y-0.5">
-                {p.weakPoints.slice(0, 3).map((wp, wi) => (
-                  <li key={wi} className="text-xs leading-snug" style={{ color: "#DC2626" }}>{wp}</li>
-                ))}
-                {p.weakPoints.length > 3 && (
-                  <li className="text-xs" style={{ color: "var(--text-muted)" }}>
-                    +{p.weakPoints.length - 3}개 더
-                  </li>
-                )}
-              </ul>
-            )}
-          </div>
-        ))}
-      </div>
-
-      {/* 확장 영역: 타사비교 스크립트 */}
-      {isExpanded && (
-        <div className="px-4 pb-4" style={{ borderTop: "1px solid var(--border)", marginTop: 4 }}>
-          <p className="text-xs font-bold mt-3 mb-2" style={{ color: "var(--text-muted)" }}>
-            타사 비교 상담 스크립트
-          </p>
-          {compScripts.length > 0 ? (
-            <div className="space-y-2">
-              {compScripts.map(s => (
-                <div key={s.id} className="rounded-xl p-3"
-                     style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-xs font-bold" style={{ color: "var(--eduwill-navy)" }}>
-                      {s.title}
-                    </span>
-                    <button onClick={() => copyScript(s)}
-                            className="shrink-0 text-xs px-2.5 py-1 rounded-lg font-bold transition"
-                            style={{
-                              background: copied === s.id ? "#DCFCE7" : "white",
-                              color:      copied === s.id ? "#166534" : "var(--eduwill-blue)",
-                              border:     `1px solid ${copied === s.id ? "#BBF7D0" : "var(--eduwill-blue)"}`,
-                            }}>
-                      {copied === s.id ? "✓ 복사됨" : "📋 복사"}
-                    </button>
-                  </div>
-                  <p className="text-xs leading-relaxed" style={{ color: "var(--text-sub)" }}>
-                    {s.body_template.slice(0, 120)}{s.body_template.length > 120 ? "…" : ""}
-                  </p>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-              타사비교 스크립트가 없습니다.{" "}
-              <Link href={`/courses/${courseId}?tab=scripts`}
-                    className="underline" style={{ color: "var(--eduwill-blue)" }}>
-                전체 스크립트 보기
-              </Link>
-            </p>
-          )}
-        </div>
-      )}
-
-      {/* 하단 버튼 */}
-      <div className="px-4 py-2.5 flex gap-2"
-           style={{ borderTop: "1px solid var(--border)", background: "var(--surface2)" }}>
-        <Link href={`/courses/${courseId}?competitor=${summary.id}`}
-              className="flex-1 text-center text-xs py-2 rounded-xl font-bold"
-              style={{ background: "var(--eduwill-yellow)", color: "var(--eduwill-navy)" }}>
-          {summary.name} 비교표
-        </Link>
       </div>
     </div>
   );
 }
 
-// ── 스크립트 패널 ─────────────────────────────────────────────────────────────
-function ScriptPanel({
-  scripts, situationTag, courseName, onClose,
-}: {
-  scripts: Script[]; situationTag: string; courseName: string; onClose: () => void;
-}) {
-  const [copied, setCopied] = useState<number | null>(null);
-  const sit = SIT[situationTag];
-  const filtered = scripts.filter(s => s.situation_tag === situationTag);
-
-  const copyScript = async (s: Script) => {
-    await navigator.clipboard.writeText(s.body_template);
-    setCopied(s.id);
-    api.recordScriptUse(s.id).catch(() => {});
-    setTimeout(() => setCopied(null), 2000);
-  };
-
-  if (!sit) return null;
-
-  return (
-    <div className="rounded-2xl overflow-hidden mb-5"
-         style={{ border: `1.5px solid ${sit.border}` }}>
-      <div className="px-5 py-3 flex items-center justify-between"
-           style={{ background: sit.bg }}>
-        <div className="flex items-center gap-2">
-          <span className="text-base">{sit.icon}</span>
-          <span className="text-xs font-bold px-2.5 py-1 rounded-full"
-                style={{ background: "white", color: sit.text, border: `1px solid ${sit.border}` }}>
-            {sit.label}
-          </span>
-          <span className="text-sm font-semibold" style={{ color: "var(--eduwill-navy)" }}>
-            {courseName} — 스크립트 {filtered.length}개
-          </span>
-        </div>
-        <button onClick={onClose}
-                className="text-xs font-bold px-3 py-1.5 rounded-lg"
-                style={{ background: "white", color: "var(--text-muted)", border: "1px solid var(--border)" }}>
-          닫기
-        </button>
-      </div>
-
-      {filtered.length > 0 ? (
-        <div style={{ background: "var(--surface)" }}>
-          {filtered.map((s, i) => (
-            <div key={s.id}
-                 className="px-5 py-4"
-                 style={{ borderTop: i > 0 ? "1px solid var(--border)" : "none" }}>
-              <div className="flex items-start justify-between gap-3 mb-2">
-                <span className="font-semibold text-sm" style={{ color: "var(--eduwill-navy)" }}>
-                  {s.title}
-                </span>
-                <button onClick={() => copyScript(s)}
-                        className="shrink-0 flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-bold transition"
-                        style={{
-                          background: copied === s.id ? "#DCFCE7" : "var(--surface2)",
-                          color:      copied === s.id ? "#166534" : "var(--eduwill-blue)",
-                          border:     `1.5px solid ${copied === s.id ? "#BBF7D0" : "var(--eduwill-blue)"}`,
-                        }}>
-                  {copied === s.id ? "✓ 복사됨" : "📋 복사"}
-                </button>
-              </div>
-              <pre className="text-sm whitespace-pre-wrap leading-relaxed font-sans"
-                   style={{ color: "var(--text-sub)" }}>
-                {s.body_template}
-              </pre>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="px-5 py-8 text-center text-sm" style={{ color: "var(--text-muted)", background: "var(--surface)" }}>
-          해당 상황의 스크립트가 없습니다.
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── 검색 결과 카드 ─────────────────────────────────────────────────────────────
-function SearchResultCard({ hit }: { hit: SearchHit }) {
-  return (
-    <div className="rounded-2xl overflow-hidden"
-         style={{ background: "var(--surface)", border: "1px solid var(--border)",
-                  boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
-      <div className="px-4 py-2.5 flex items-center justify-between"
-           style={{ background: "var(--eduwill-navy)" }}>
-        <span className="text-xs font-semibold text-white">
-          {hit.courseIcon} {hit.courseName}
-        </span>
-        <span className="text-xs font-bold px-2.5 py-0.5 rounded-full"
-              style={{ background: "rgba(255,255,255,0.15)", color: "rgba(255,255,255,0.9)" }}>
-          {hit.competitorName}
-        </span>
-      </div>
-      <div className="p-4">
-        <div className="flex items-start justify-between gap-2 mb-2">
-          <span className="text-sm font-bold" style={{ color: "var(--text)" }}>
-            {hit.productName || "상품명 미확인"}
-          </span>
-          <span className="shrink-0 text-xs font-bold px-2.5 py-1 rounded-full"
-                style={{
-                  background: hit.price === "가격 문의" ? "#F3F4F6" : "#FEF2F2",
-                  color:      hit.price === "가격 문의" ? "#9CA3AF"  : "#DC2626",
-                }}>
-            {hit.price}
-          </span>
-        </div>
-        {hit.weakPoints.length > 0 && (
-          <ul className="space-y-0.5 mb-3">
-            {hit.weakPoints.slice(0, 2).map((wp, i) => (
-              <li key={i} className="text-xs" style={{ color: "#DC2626" }}>{wp}</li>
-            ))}
-          </ul>
-        )}
-        <Link href={`/courses/${hit.courseId}?competitor=${hit.competitorId}`}
-              className="inline-flex items-center gap-1 text-xs font-bold"
-              style={{ color: "var(--eduwill-blue)" }}>
-          {hit.competitorName} 비교표
-          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
-          </svg>
-        </Link>
-      </div>
-    </div>
-  );
-}
-
-// ── 메인 ──────────────────────────────────────────────────────────────────────
+// ── 메인 페이지 ───────────────────────────────────────────────────────────────
 export default function ConsultPage() {
-  const [courses, setCourses]       = useState<Course[]>([]);
-  const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [comparison, setComparison] = useState<ComparisonResponse | null>(null);
-  const [scripts, setScripts]       = useState<Script[]>([]);
-  const [loading, setLoading]       = useState(true);
-  const [courseLoading, setCourseLoading] = useState(false);
+  const [courses, setCourses]               = useState<Course[]>([]);
+  const [selectedCourse, setSelectedCourse] = useState<number | null>(null);
+  const [comparison, setComparison]         = useState<ComparisonResponse | null>(null);
+  const [selectedComp, setSelectedComp]     = useState<number | null>(null);
+  const [loading, setCourseLoading]         = useState(true);
+  const [compLoading, setCompLoading]       = useState(false);
 
-  const [query, setQuery]           = useState("");
-  const [searchHits, setSearchHits] = useState<SearchHit[]>([]);
-  const [searchLoading, setSearchLoading] = useState(false);
-  const [allComps, setAllComps]     = useState<Map<number, ComparisonResponse>>(new Map());
+  const [situation, setSituation]           = useState("타사비교");
+  const [script, setScript]                 = useState("");
+  const [scriptLoading, setScriptLoading]   = useState(false);
+  const [scriptError, setScriptError]       = useState("");
+  const [copied, setCopied]                 = useState(false);
 
-  const [expandedComp, setExpandedComp] = useState<number | null>(null);
-  const [activeSit, setActiveSit]       = useState<string | null>(null);
+  const [apiKey, setApiKey]                 = useState<string | null>(null);
+  const [showApiModal, setShowApiModal]     = useState(false);
+  const scriptRef = useRef<HTMLDivElement>(null);
 
-  // 과목 로드
+  // localStorage에서 API 키 로드
+  useEffect(() => {
+    const stored = localStorage.getItem("claude_api_key") || "";
+    setApiKey(stored);
+  }, []);
+
+  // 과목 목록 로드
   useEffect(() => {
     api.courses()
       .then(cs => {
         const active = cs.filter(c => c.is_active).sort((a, b) => a.sort_order - b.sort_order);
         setCourses(active);
-        if (active.length) setSelectedId(active[0].id);
-      })
-      .finally(() => setLoading(false));
-  }, []);
-
-  // 과목별 데이터 로드
-  useEffect(() => {
-    if (!selectedId) return;
-    setCourseLoading(true);
-    setExpandedComp(null);
-    setActiveSit(null);
-    Promise.all([api.comparison(selectedId), api.scripts(selectedId)])
-      .then(([comp, sc]) => {
-        setComparison(comp);
-        setScripts(sc);
-        setAllComps(prev => new Map(prev).set(selectedId, comp));
+        if (active.length) setSelectedCourse(active[0].id);
       })
       .finally(() => setCourseLoading(false));
-  }, [selectedId]);
+  }, []);
 
-  // 전체 검색
-  const doSearch = useCallback(async (q: string) => {
-    if (!q.trim()) { setSearchHits([]); return; }
-    let map = allComps;
-
-    if (map.size < courses.length && courses.length > 0) {
-      setSearchLoading(true);
-      const missing = courses.filter(c => !map.has(c.id));
-      const loaded  = await Promise.all(missing.map(c => api.comparison(c.id)));
-      const newMap  = new Map(map);
-      missing.forEach((c, i) => newMap.set(c.id, loaded[i]));
-      setAllComps(newMap);
-      map = newMap;
-      setSearchLoading(false);
-    }
-
-    const lq   = q.toLowerCase();
-    const hits: SearchHit[] = [];
-    const seen = new Set<string>();
-
-    for (const [cid, comp] of map) {
-      const course = courses.find(c => c.id === cid);
-      if (!course) continue;
-
-      for (const competitor of comp.competitors) {
-        const key = `${cid}-${competitor.id}`;
-        if (seen.has(key)) continue;
-
-        for (const item of comp.items) {
-          const raw = item.competitor_values[String(competitor.id)] || "";
-          const searchText = [competitor.name, course.name, raw, item.name].join(" ").toLowerCase();
-
-          if (searchText.includes(lq)) {
-            const { productName, price, weakPoints } = parseCompVal(raw);
-            hits.push({
-              courseId: cid, courseName: course.name, courseIcon: course.icon,
-              competitorId: competitor.id, competitorName: competitor.name, productName, price,
-              weakPoints: weakPoints.slice(0, 3),
-            });
-            seen.add(key);
-            break;
-          }
-        }
-      }
-    }
-
-    setSearchHits(hits);
-  }, [courses, allComps]);
-
+  // 과목 선택 시 비교 데이터 로드
   useEffect(() => {
-    const t = setTimeout(() => doSearch(query), 250);
-    return () => clearTimeout(t);
-  }, [query, doSearch]);
+    if (!selectedCourse) return;
+    setCompLoading(true);
+    setComparison(null);
+    setSelectedComp(null);
+    setScript("");
+    api.comparison(selectedCourse)
+      .then(comp => {
+        setComparison(comp);
+        if (comp.competitors.length) setSelectedComp(comp.competitors[0].id);
+      })
+      .finally(() => setCompLoading(false));
+  }, [selectedCourse]);
 
-  const isSearching = query.trim().length > 0;
-  const selectedCourse = courses.find(c => c.id === selectedId);
-  const summaries = comparison ? buildSummaries(comparison) : [];
-  const scriptMap = scripts.reduce<Record<string, Script[]>>((acc, s) => {
-    (acc[s.situation_tag] ??= []).push(s);
-    return acc;
-  }, {});
+  const handleSaveApiKey = useCallback((key: string) => {
+    localStorage.setItem("claude_api_key", key);
+    setApiKey(key);
+    setShowApiModal(false);
+  }, []);
+
+  const handleGenerateScript = useCallback(async () => {
+    if (!apiKey) { setShowApiModal(true); return; }
+    if (!comparison || selectedComp === null) return;
+
+    const compInfo = parseCompetitorInfo(comparison, selectedComp);
+    if (!compInfo) return;
+    const ewProds = parseEduwillProducts(comparison);
+    const course  = courses.find(c => c.id === selectedCourse);
+
+    setScriptLoading(true);
+    setScriptError("");
+    setScript("");
+    try {
+      const result = await generateScript(
+        apiKey,
+        course?.name || "",
+        situation,
+        ewProds,
+        compInfo
+      );
+      setScript(result);
+      setTimeout(() => scriptRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
+    } catch (e) {
+      setScriptError((e as Error).message);
+    } finally {
+      setScriptLoading(false);
+    }
+  }, [apiKey, comparison, selectedComp, situation, courses, selectedCourse]);
+
+  const handleCopy = useCallback(async () => {
+    if (!script) return;
+    await navigator.clipboard.writeText(script);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }, [script]);
+
+  // 파생 데이터
+  const eduwillProducts  = comparison ? parseEduwillProducts(comparison) : [];
+  const competitorInfo   = (comparison && selectedComp !== null)
+    ? parseCompetitorInfo(comparison, selectedComp) : null;
+  const selectedCourseObj = courses.find(c => c.id === selectedCourse);
 
   if (loading) {
     return (
@@ -430,212 +303,306 @@ export default function ConsultPage() {
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
 
+      {showApiModal && <ApiKeyModal onSave={handleSaveApiKey} />}
+
       {/* 헤더 */}
       <header style={{ background: "var(--eduwill-navy)", borderBottom: "3px solid var(--eduwill-yellow)" }}>
-        <div className="max-w-6xl mx-auto px-6 py-3 flex items-center gap-3">
-          <Link href="/" className="flex items-center gap-1.5 text-xs font-medium hover:opacity-80"
-                style={{ color: "rgba(255,255,255,0.65)" }}>
+        <div className="max-w-7xl mx-auto px-5 py-3 flex items-center gap-3">
+          <Link href="/" className="flex items-center gap-1 text-xs font-medium hover:opacity-80"
+                style={{ color: "rgba(255,255,255,0.6)" }}>
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-            홈
+            </svg>홈
           </Link>
           <span style={{ color: "rgba(255,255,255,0.25)" }}>│</span>
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center text-lg"
-               style={{ background: "var(--eduwill-yellow)" }}>
-            💬
-          </div>
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center text-base"
+               style={{ background: "var(--eduwill-yellow)" }}>💬</div>
           <div>
-            <div className="font-bold text-base text-white">상담 도우미</div>
-            <div className="text-xs" style={{ color: "rgba(255,255,255,0.55)" }}>
-              경쟁사 즉답 카드 · 상황별 스크립트 · 전체 키워드 검색
+            <div className="font-bold text-sm text-white">상담 어시스턴트</div>
+            <div className="text-xs" style={{ color: "rgba(255,255,255,0.5)" }}>
+              에듀윌·경쟁사 정보 즉시 확인 + AI 스크립트 생성
             </div>
+          </div>
+          <div className="ml-auto">
+            <button onClick={() => setShowApiModal(true)}
+                    className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-medium"
+                    style={{ background: apiKey ? "rgba(255,255,255,0.12)" : "rgba(255,200,0,0.2)",
+                             color: apiKey ? "rgba(255,255,255,0.7)" : "var(--eduwill-yellow)",
+                             border: `1px solid ${apiKey ? "rgba(255,255,255,0.2)" : "var(--eduwill-yellow)"}` }}>
+              🔑 {apiKey ? "API 키 변경" : "API 키 설정"}
+            </button>
           </div>
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-6 py-6">
-
-        {/* 검색창 */}
-        <div className="relative mb-6">
-          <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
-            <svg className="w-5 h-5" style={{ color: "var(--text-muted)" }}
-                 fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
+      {/* 과목 탭 */}
+      <div style={{ background: "var(--surface)", borderBottom: "1px solid var(--border)" }}>
+        <div className="max-w-7xl mx-auto px-5">
+          <div className="flex gap-1 overflow-x-auto py-2" style={{ scrollbarWidth: "none" }}>
+            {courses.map(c => (
+              <button key={c.id} onClick={() => setSelectedCourse(c.id)}
+                      className="shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold transition"
+                      style={{
+                        background: selectedCourse === c.id ? "var(--eduwill-navy)" : "transparent",
+                        color:      selectedCourse === c.id ? "white" : "var(--text-muted)",
+                      }}>
+                {c.icon} {c.name}
+              </button>
+            ))}
           </div>
-          <input
-            type="text"
-            value={query}
-            onChange={e => setQuery(e.target.value)}
-            placeholder='경쟁사명·상품명·키워드 검색   예: "박문각", "환급", "평생패스"'
-            className="w-full pl-12 pr-12 py-4 rounded-2xl text-sm font-medium outline-none"
-            style={{
-              background: "var(--surface)",
-              border: `2px solid ${isSearching ? "var(--eduwill-blue)" : "var(--eduwill-yellow)"}`,
-              color: "var(--text)",
-              boxShadow: "0 2px 12px rgba(0,0,0,0.07)",
-              transition: "border-color 0.15s",
-            }}
-          />
-          {query && (
-            <button onClick={() => setQuery("")}
-                    className="absolute inset-y-0 right-4 flex items-center text-xl font-light"
-                    style={{ color: "var(--text-muted)" }}>
-              ×
-            </button>
-          )}
         </div>
+      </div>
 
-        {/* ── 검색 모드 ── */}
-        {isSearching ? (
-          <div>
-            {searchLoading ? (
-              <div className="flex flex-col items-center gap-3 py-16">
-                <div className="w-8 h-8 rounded-full border-[3px] animate-spin"
-                     style={{ borderColor: "var(--eduwill-yellow)", borderTopColor: "transparent" }} />
-                <p className="text-sm" style={{ color: "var(--text-muted)" }}>전체 과목 데이터 검색 중…</p>
-              </div>
-            ) : (
-              <>
-                <p className="text-xs mb-4" style={{ color: "var(--text-muted)" }}>
-                  <span className="font-bold" style={{ color: "var(--eduwill-navy)" }}>"{query}"</span>
-                  {" "}검색 결과{" "}
-                  <span className="font-bold" style={{ color: "var(--eduwill-blue)" }}>
-                    {searchHits.length}건
-                  </span>
-                </p>
-                {searchHits.length === 0 ? (
-                  <div className="text-center py-16 rounded-2xl"
-                       style={{ border: "2px dashed var(--border)", background: "var(--surface2)" }}>
-                    <p className="text-lg mb-1">🔍</p>
-                    <p className="text-sm font-semibold mb-1" style={{ color: "var(--eduwill-navy)" }}>
-                      검색 결과가 없습니다
-                    </p>
-                    <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                      경쟁사명(박문각·해커스 등) 또는 키워드(환급·합격률 등)를 입력해보세요
-                    </p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {searchHits.map((hit, i) => <SearchResultCard key={i} hit={hit} />)}
-                  </div>
-                )}
-              </>
-            )}
+      <main className="max-w-7xl mx-auto px-5 py-5">
+
+        {compLoading ? (
+          <div className="flex items-center justify-center py-24">
+            <div className="w-8 h-8 rounded-full border-[3px] animate-spin"
+                 style={{ borderColor: "var(--eduwill-yellow)", borderTopColor: "transparent" }} />
           </div>
-
-        ) : (
-          /* ── 탐색 모드 ── */
-          <div>
-            {/* 상황별 스크립트 바로가기 */}
-            <div className="mb-5">
-              <p className="text-xs font-bold mb-2.5" style={{ color: "var(--text-muted)" }}>
-                상황별 스크립트 바로가기
-              </p>
-              <div className="flex gap-2 flex-wrap">
-                {Object.entries(SIT).map(([tag, { label, bg, text, border, icon }]) => {
-                  const isActive = activeSit === tag;
-                  return (
-                    <button key={tag}
-                            onClick={() => setActiveSit(isActive ? null : tag)}
-                            className="flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-bold transition"
-                            style={{
-                              background: isActive ? bg : "var(--surface)",
-                              color:      isActive ? text : "var(--text-muted)",
-                              border:     isActive ? `1.5px solid ${border}` : "1px solid var(--border)",
-                              boxShadow:  isActive ? "0 2px 8px rgba(0,0,0,0.08)" : "none",
-                            }}>
-                      {icon} {label}
-                    </button>
-                  );
-                })}
-              </div>
+        ) : !comparison ? null : (
+          <>
+            {/* 경쟁사 탭 */}
+            <div className="flex gap-2 flex-wrap mb-5">
+              {comparison.competitors.map(c => (
+                <button key={c.id} onClick={() => { setSelectedComp(c.id); setScript(""); }}
+                        className="px-4 py-2 rounded-xl text-sm font-bold transition"
+                        style={{
+                          background: selectedComp === c.id ? "var(--eduwill-navy)" : "var(--surface)",
+                          color:      selectedComp === c.id ? "white" : "var(--text-muted)",
+                          border:     selectedComp === c.id
+                            ? "2px solid var(--eduwill-navy)"
+                            : "1.5px solid var(--border)",
+                        }}>
+                  {c.name}
+                </button>
+              ))}
             </div>
 
-            {/* 스크립트 패널 */}
-            {activeSit && (
-              <ScriptPanel
-                scripts={scripts}
-                situationTag={activeSit}
-                courseName={selectedCourse?.name ?? ""}
-                onClose={() => setActiveSit(null)}
-              />
-            )}
+            {/* 메인 2컬럼 */}
+            {competitorInfo && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-5">
 
-            {/* 과목 탭 */}
-            <div className="mb-5">
-              <p className="text-xs font-bold mb-2.5" style={{ color: "var(--text-muted)" }}>
-                과목 선택
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {courses.map(c => (
-                  <button key={c.id}
-                          onClick={() => setSelectedId(c.id)}
-                          className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold transition"
-                          style={{
-                            background: selectedId === c.id ? "var(--eduwill-navy)" : "var(--surface)",
-                            color:      selectedId === c.id ? "white" : "var(--text-muted)",
-                            border:     selectedId === c.id
-                              ? "2px solid var(--eduwill-navy)"
-                              : "1px solid var(--border)",
-                          }}>
-                    {c.icon} {c.name}
-                  </button>
-                ))}
-              </div>
-            </div>
+                {/* ── 에듀윌 상품 ── */}
+                <div className="rounded-2xl overflow-hidden"
+                     style={{ border: "2px solid var(--eduwill-yellow)", background: "var(--surface)" }}>
+                  <div className="px-5 py-3 flex items-center gap-2"
+                       style={{ background: "var(--eduwill-navy)" }}>
+                    <span className="text-lg">{selectedCourseObj?.icon}</span>
+                    <div>
+                      <div className="text-xs font-bold" style={{ color: "var(--eduwill-yellow)" }}>에듀윌</div>
+                      <div className="text-sm font-bold text-white">{selectedCourseObj?.name}</div>
+                    </div>
+                  </div>
 
-            {/* 경쟁사 카드 */}
-            {courseLoading ? (
-              <div className="flex items-center justify-center py-16">
-                <div className="w-8 h-8 rounded-full border-[3px] animate-spin"
-                     style={{ borderColor: "var(--eduwill-yellow)", borderTopColor: "transparent" }} />
-              </div>
-            ) : (
-              <>
-                <div className="flex items-center justify-between mb-3">
-                  <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                    <span className="font-bold" style={{ color: "var(--eduwill-navy)" }}>
-                      {selectedCourse?.icon} {selectedCourse?.name}
-                    </span>
-                    {" "}경쟁사 {summaries.length}개
-                  </p>
-                  <Link href={`/courses/${selectedId}`}
-                        className="text-xs font-bold flex items-center gap-1"
-                        style={{ color: "var(--eduwill-blue)" }}>
-                    전체 비교표
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
-                    </svg>
-                  </Link>
-                </div>
-
-                {summaries.length > 0 ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {summaries.map(s => (
-                      <CompetitorCard
-                        key={s.id}
-                        summary={s}
-                        courseId={selectedId!}
-                        scripts={scriptMap["타사비교"] || []}
-                        isExpanded={expandedComp === s.id}
-                        onToggle={() => setExpandedComp(expandedComp === s.id ? null : s.id)}
-                      />
+                  <div className="p-4 space-y-3">
+                    {eduwillProducts.map((p, i) => (
+                      <div key={i} className="rounded-xl p-4"
+                           style={{ background: "var(--eduwill-yellow-light)",
+                                    border: "1px solid var(--eduwill-yellow)" }}>
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <span className="font-bold text-sm leading-snug"
+                                style={{ color: "var(--eduwill-navy)" }}>{p.name}</span>
+                          <span className="shrink-0 text-sm font-bold px-3 py-1 rounded-full"
+                                style={{ background: "var(--eduwill-navy)", color: "var(--eduwill-yellow)" }}>
+                            {p.price}
+                          </span>
+                        </div>
+                        {p.features.length > 0 && (
+                          <ul className="space-y-0.5">
+                            {p.features.map((f, fi) => (
+                              <li key={fi} className="text-xs flex items-center gap-1.5"
+                                  style={{ color: "var(--eduwill-navy)" }}>
+                                <span className="text-green-600 font-bold">✓</span> {f}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
                     ))}
                   </div>
-                ) : (
-                  <div className="text-center py-16 rounded-2xl"
+                </div>
+
+                {/* ── 경쟁사 상품 ── */}
+                <div className="rounded-2xl overflow-hidden"
+                     style={{ border: "1.5px solid var(--border)", background: "var(--surface)" }}>
+                  <div className="px-5 py-3 flex items-center justify-between"
+                       style={{ background: "#F3F4F6" }}>
+                    <div>
+                      <div className="text-xs font-bold text-gray-500">경쟁사</div>
+                      <div className="text-sm font-bold" style={{ color: "#374151" }}>
+                        {competitorInfo.name} {selectedCourseObj?.name}
+                      </div>
+                    </div>
+                    <Link href={`/courses/${selectedCourse}`}
+                          className="text-xs px-3 py-1.5 rounded-lg font-medium"
+                          style={{ background: "white", color: "var(--eduwill-blue)",
+                                   border: "1px solid var(--border)" }}>
+                      상세 비교표 →
+                    </Link>
+                  </div>
+
+                  <div className="p-4">
+                    {/* 상품 목록 */}
+                    <p className="text-xs font-bold mb-2" style={{ color: "var(--text-muted)" }}>상품 현황</p>
+                    <div className="space-y-2 mb-4">
+                      {competitorInfo.products.length > 0 ? (
+                        competitorInfo.products.map((p, i) => (
+                          <div key={i} className="flex items-center justify-between py-2 px-3 rounded-xl"
+                               style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
+                            <span className="text-sm font-medium" style={{ color: "var(--text)" }}>
+                              {p.name}
+                            </span>
+                            <span className="text-sm font-bold shrink-0 ml-2"
+                                  style={{
+                                    color:      p.price === "가격 문의" ? "#9CA3AF" : "#DC2626",
+                                    background: p.price === "가격 문의" ? "#F3F4F6" : "#FEF2F2",
+                                    padding: "2px 10px",
+                                    borderRadius: "999px",
+                                  }}>
+                              {p.price}
+                            </span>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-xs text-center py-4" style={{ color: "var(--text-muted)" }}>
+                          상품 정보 없음
+                        </p>
+                      )}
+                    </div>
+
+                    {/* 에듀윌 우위 포인트 */}
+                    {competitorInfo.advantages.length > 0 && (
+                      <>
+                        <p className="text-xs font-bold mb-2" style={{ color: "var(--text-muted)" }}>
+                          에듀윌 차별점
+                        </p>
+                        <div className="rounded-xl p-3"
+                             style={{ background: "#EFF6FF", border: "1px solid #BFDBFE" }}>
+                          <ul className="space-y-1">
+                            {competitorInfo.advantages.slice(0, 5).map((a, i) => (
+                              <li key={i} className="text-xs flex items-start gap-1.5"
+                                  style={{ color: "#1D4ED8" }}>
+                                <span className="shrink-0 font-bold">✅</span>
+                                <span>{a.replace(/^[❌⚠️]\s*/, "")}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ── AI 스크립트 생성 ── */}
+            <div className="rounded-2xl overflow-hidden"
+                 style={{ border: "1.5px solid var(--border)", background: "var(--surface)" }}
+                 ref={scriptRef}>
+              <div className="px-5 py-3 flex items-center justify-between"
+                   style={{ background: "var(--eduwill-navy)" }}>
+                <div className="flex items-center gap-2">
+                  <span className="text-base">💬</span>
+                  <span className="font-bold text-sm text-white">AI 상담 스크립트</span>
+                  <span className="text-xs px-2 py-0.5 rounded-full"
+                        style={{ background: "rgba(255,255,255,0.15)", color: "rgba(255,255,255,0.8)" }}>
+                    Claude Haiku
+                  </span>
+                </div>
+                {!apiKey && (
+                  <button onClick={() => setShowApiModal(true)}
+                          className="text-xs px-3 py-1.5 rounded-lg font-bold"
+                          style={{ background: "var(--eduwill-yellow)", color: "var(--eduwill-navy)" }}>
+                    API 키 설정 필요
+                  </button>
+                )}
+              </div>
+
+              <div className="p-5">
+                {/* 상황 선택 */}
+                <div className="flex flex-wrap gap-2 mb-4">
+                  {SITUATIONS.map(s => (
+                    <button key={s.key} onClick={() => setSituation(s.key)}
+                            className="flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-bold transition"
+                            style={{
+                              background: situation === s.key ? "var(--eduwill-navy)" : "var(--surface2)",
+                              color:      situation === s.key ? "white" : "var(--text-muted)",
+                              border:     situation === s.key ? "none" : "1px solid var(--border)",
+                            }}>
+                      {s.icon} {s.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* 생성 버튼 */}
+                <button
+                  onClick={handleGenerateScript}
+                  disabled={scriptLoading || !competitorInfo}
+                  className="w-full py-3 rounded-xl text-sm font-bold transition mb-4 disabled:opacity-50"
+                  style={{ background: "var(--eduwill-yellow)", color: "var(--eduwill-navy)" }}>
+                  {scriptLoading ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                      스크립트 생성 중…
+                    </span>
+                  ) : (
+                    `✨ ${competitorInfo?.name || ""} 대상 ${SITUATIONS.find(s => s.key === situation)?.label} 스크립트 생성`
+                  )}
+                </button>
+
+                {/* 오류 */}
+                {scriptError && (
+                  <div className="rounded-xl px-4 py-3 mb-3 text-xs"
+                       style={{ background: "#FEF2F2", color: "#B91C1C", border: "1px solid #FECACA" }}>
+                    ⚠️ {scriptError}
+                    {scriptError.includes("401") && (
+                      <button onClick={() => setShowApiModal(true)} className="ml-2 underline font-bold">
+                        API 키 재설정
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {/* 생성된 스크립트 */}
+                {script && (
+                  <div className="rounded-xl overflow-hidden"
+                       style={{ border: "1.5px solid #BFDBFE", background: "#EFF6FF" }}>
+                    <div className="px-4 py-2.5 flex items-center justify-between"
+                         style={{ background: "#DBEAFE", borderBottom: "1px solid #BFDBFE" }}>
+                      <div className="flex items-center gap-2 text-xs font-bold" style={{ color: "#1D4ED8" }}>
+                        <span>💬</span>
+                        <span>{competitorInfo?.name} · {SITUATIONS.find(s => s.key === situation)?.label}</span>
+                      </div>
+                      <button onClick={handleCopy}
+                              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-bold transition"
+                              style={{
+                                background: copied ? "#DCFCE7" : "white",
+                                color:      copied ? "#166534" : "#1D4ED8",
+                                border:     `1px solid ${copied ? "#BBF7D0" : "#BFDBFE"}`,
+                              }}>
+                        {copied ? "✓ 복사됨" : "📋 복사"}
+                      </button>
+                    </div>
+                    <pre className="px-5 py-4 text-sm whitespace-pre-wrap leading-relaxed font-sans"
+                         style={{ color: "#1E3A5F" }}>
+                      {script}
+                    </pre>
+                  </div>
+                )}
+
+                {/* 미생성 안내 */}
+                {!script && !scriptLoading && !scriptError && (
+                  <div className="text-center py-6 rounded-xl"
                        style={{ border: "2px dashed var(--border)", background: "var(--surface2)" }}>
-                    <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-                      경쟁사 비교 데이터가 없습니다.
+                    <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                      상황을 선택하고 생성 버튼을 누르면 AI가 맞춤 스크립트를 작성합니다
                     </p>
                   </div>
                 )}
-              </>
-            )}
-          </div>
+              </div>
+            </div>
+          </>
         )}
       </main>
     </div>
