@@ -199,7 +199,16 @@ function HomeInner() {
       const result = await genScript(apiKey, course?.name || "", sit, parseEduwill(comp), ci);
       setScript(result);
       setTimeout(() => scriptEl.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
-    } catch (e) { setScriptErr((e as Error).message); }
+    } catch (e) {
+      const msg = (e as Error).message;
+      setScriptErr(msg);
+      // 인증 오류 시 잘못된 키 자동 삭제 + 재설정 모달 표시
+      if (msg.includes("invalid") || msg.includes("401") || msg.includes("authentication") || msg.includes("Unauthorized")) {
+        localStorage.removeItem("claude_api_key");
+        setApiKey("");
+        setTimeout(() => setShowModal(true), 300);
+      }
+    }
     finally { setScriptLoading(false); }
   }, [apiKey, comp, competitorId, sit, courses, courseId]);
 
@@ -452,8 +461,11 @@ function HomeInner() {
                   <div className="rounded-xl px-4 py-3 mb-3 text-xs"
                        style={{ background: "#FEF2F2", color: "#B91C1C", border: "1px solid #FECACA" }}>
                     ⚠️ {scriptErr}
-                    {scriptErr.includes("401") && (
-                      <button onClick={() => setShowModal(true)} className="ml-2 underline font-bold">API 키 재설정</button>
+                    {(scriptErr.includes("401") || scriptErr.includes("invalid") || scriptErr.includes("authentication")) && (
+                      <button onClick={() => { localStorage.removeItem("claude_api_key"); setApiKey(""); setShowModal(true); }}
+                              className="ml-2 underline font-bold">
+                        API 키 재설정
+                      </button>
                     )}
                   </div>
                 )}
