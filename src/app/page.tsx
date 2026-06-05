@@ -147,7 +147,7 @@ function ApiKeyModal({ onSave, onClose }: { onSave: (k: string) => void; onClose
           <p className="text-xs" style={{ color: "#166534" }}>
             aistudio.google.com → Get API key → 무료 발급 (카드 불필요)
           </p>
-          <p className="text-xs mt-0.5" style={{ color: "#166534", opacity: 0.8 }}>키 형식: AIza...</p>
+          <p className="text-xs mt-0.5" style={{ color: "#166534", opacity: 0.8 }}>키 형식: AQ... 또는 AIza...</p>
         </div>
 
         {/* Claude */}
@@ -292,7 +292,8 @@ function HomeInner() {
 
   // 현재 상황에 맞는 사전 스크립트
   const preScripts = scripts.filter(s => s.situation_tag === sit);
-  const apiLabel   = apiKey.startsWith("AIza") ? "Gemini" : "Claude";
+  // sk-ant- 로 시작하면 Claude, 나머지(AIza, AQ. 등)는 모두 Gemini
+  const apiLabel   = apiKey.startsWith("sk-ant-") ? "Claude" : "Gemini";
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
