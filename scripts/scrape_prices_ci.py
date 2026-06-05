@@ -443,27 +443,59 @@ def scrape_sdedu():
 
 @scraper("해커스")
 def scrape_hackers():
+    """
+    해커스는 JS 렌더링 사이트. Playwright로 렌더링 후 키워드 매핑으로 가격 추출.
+    인덱스 기반 순서 매핑은 오류 발생 → 키워드 근접 방식만 사용.
+    """
     result = {}
-    pages = [
-        ("https://land.hackers.com/", 500_000, 3_000_000,
-         ["평생환급 평생수강반", "평생보장반", "2026+2027 2년합격반"]),
-        ("https://house.hackers.com/", 300_000, 2_500_000,
-         ["100% 환급평생반", "평생보장 프리미엄"]),
-        ("https://sabok.edu2080.co.kr/", 100_000, 1_000_000,
-         ["장학금반", "합격보장반(기본연장반)"]),
-        ("https://gumjung.edu2080.co.kr/", 100_000, 1_000_000,
-         ["고졸 검정고시 무제한 연장반", "검정고시 환급반"]),
-        ("https://egosi.hackers.com/site/?c=lec_9", 200_000, 3_000_000,
-         ["9급 행정직 전직렬 합불 0원 패스 2028", "7대비 스파르타 환급 올패스",
-          "9급 직렬별 합불 0원 패스"]),
-        ("https://post.hackers.com/", 100_000, 1_000_000,
-         ["2027 계리직 기적의 패스"]),
-    ]
-    for url, mn, mx, names in pages:
-        html = fetch(url)
-        prices = extract_prices(html or "", mn, mx)
-        for i, name in enumerate(names):
-            result[name] = prices[i] if i < len(prices) else None
+
+    # 공인중개사 (land.hackers.com)
+    t = page_text(render_page("https://land.hackers.com/", "domcontentloaded", 2000))
+    result["평생환급 평생수강반"] = find_price_near(
+        t, ["평생보장반 프리미엄", "프리미엄 합격할 때까지"], 800_000, 2_000_000)
+    result["평생보장반"] = find_price_near(
+        t, ["평생보장반 합격"], 600_000, 1_400_000)
+    result["2026+2027 2년합격반"] = find_price_near(
+        t, ["2026+2027 2년합격반", "26+27 2년합격반", "2년합격반"], 500_000, 1_300_000)
+
+    # 주택관리사 (house.hackers.com)
+    t2 = page_text(render_page("https://house.hackers.com/", "domcontentloaded", 2000))
+    result["100% 환급평생반"] = find_price_near(
+        t2, ["2년100% 환급평생반", "100% 환급평생반", "환급기간 2년+평생수강"], 400_000, 1_200_000)
+    result["평생보장 프리미엄"] = find_price_near(
+        t2, ["환급+평생수강", "평생보장 프리미엄"], 600_000, 1_400_000)
+    result["2026+2027 2년합격반"] = find_price_near(
+        t2, ["26+27 2년 합격반", "주택관리사 2년합격반"], 400_000, 1_000_000)
+
+    # 사회복지사 (sabok.edu2080.co.kr)
+    t3 = page_text(render_page("https://sabok.edu2080.co.kr/", "domcontentloaded", 2000))
+    result["장학금반"] = find_price_near(
+        t3, ["장학금반", "드림패스", "장학금 합격반"], 100_000, 800_000)
+    result["합격보장반(기본연장반)"] = find_price_near(
+        t3, ["합격보장반", "기본연장반", "기본 연장반"], 100_000, 700_000)
+
+    # 검정고시 (gumjung.edu2080.co.kr)
+    t4 = page_text(render_page("https://gumjung.edu2080.co.kr/", "domcontentloaded", 2000))
+    result["고졸 검정고시 무제한 연장반"] = find_price_near(
+        t4, ["무제한 연장반", "고졸 무제한", "고졸 검정고시 무제한"], 100_000, 800_000)
+    result["검정고시 환급반"] = find_price_near(
+        t4, ["검정고시 환급반", "환급반"], 100_000, 700_000)
+
+    # 9급공무원 (egosi.hackers.com)
+    t5 = page_text(render_page(
+        "https://egosi.hackers.com/site/?c=lec_9", "domcontentloaded", 2000))
+    result["9급 행정직 전직렬 합불 0원 패스 2028"] = find_price_near(
+        t5, ["합불 0원 패스 2028", "28대비", "전직렬 합불 0원"], 500_000, 3_000_000)
+    result["7대비 스파르타 환급 올패스"] = find_price_near(
+        t5, ["7대비 스파르타", "스파르타 환급 올패스"], 300_000, 2_000_000)
+    result["9급 직렬별 합불 0원 패스"] = find_price_near(
+        t5, ["직렬별 합불 0원", "직렬별 합불"], 200_000, 1_000_000)
+
+    # 계리직 (post.hackers.com)
+    t6 = page_text(render_page("https://post.hackers.com/", "domcontentloaded", 2000))
+    result["2027 계리직 기적의 패스"] = find_price_near(
+        t6, ["계리직 기적의 패스", "기적의 패스"], 100_000, 800_000)
+
     return result
 
 
