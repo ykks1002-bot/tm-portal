@@ -116,7 +116,8 @@ async function genWithClaude(key: string, prompt: string): Promise<string> {
 
 async function genScript(key: string, course: string, sit: string, ew: EProduct[], ci: CompInfo): Promise<string> {
   const prompt = buildPrompt(course, sit, ew, ci);
-  return key.startsWith("AIza") ? genWithGemini(key, prompt) : genWithClaude(key, prompt);
+  // Claude는 sk-ant- 로 시작, 나머지는 Gemini로 처리
+  return key.startsWith("sk-ant-") ? genWithClaude(key, prompt) : genWithGemini(key, prompt);
 }
 
 function isAuthError(msg: string) {
@@ -127,9 +128,10 @@ function isAuthError(msg: string) {
 // ── API 키 모달 ───────────────────────────────────────────────────────────────
 function ApiKeyModal({ onSave, onClose }: { onSave: (k: string) => void; onClose: () => void }) {
   const [v, setV] = useState("");
-  const isGemini = v.startsWith("AIza");
   const isClaude = v.startsWith("sk-ant-");
-  const valid = isGemini || isClaude;
+  // Gemini: AIza... (구형) 또는 AQ. (신형) 또는 기타 Google AI 키
+  const isGemini = !isClaude && v.length >= 10;
+  const valid = isClaude || isGemini;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.6)" }}>
@@ -160,7 +162,7 @@ function ApiKeyModal({ onSave, onClose }: { onSave: (k: string) => void; onClose
         </div>
 
         <input type="password"
-               placeholder="AIza... (Gemini) 또는 sk-ant-... (Claude)"
+               placeholder="AQ... / AIza... (Gemini) 또는 sk-ant-... (Claude)"
                value={v} onChange={e => setV(e.target.value)}
                onKeyDown={e => e.key === "Enter" && valid && onSave(v)}
                className="w-full px-4 py-2.5 rounded-xl text-sm mb-3 outline-none"
@@ -168,7 +170,7 @@ function ApiKeyModal({ onSave, onClose }: { onSave: (k: string) => void; onClose
 
         {v && !valid && (
           <p className="text-xs mb-2" style={{ color: "#DC2626" }}>
-            AIza... (Gemini) 또는 sk-ant-... (Claude) 형식으로 입력해주세요
+            키를 10자 이상 입력해주세요
           </p>
         )}
 
