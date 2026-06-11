@@ -151,6 +151,13 @@ export const api = {
   createUser: (body: { email: string; name: string; password: string; role: string }) =>
     request("/api/admin/users", { method: "POST", body: JSON.stringify(body) }),
   toggleUser: (id: number) => request(`/api/admin/users/${id}/toggle`, { method: "PUT" }),
+
+  // Price Management
+  priceManagement: () => request<PriceRow[]>("/api/admin/prices"),
+  priceAlerts: () => request<PriceAlert[]>("/api/admin/price-alerts"),
+  markAlertSeen: (id: number) => request(`/api/admin/price-alerts/${id}/seen`, { method: "POST" }),
+  markAllAlertsSeen: () => request("/api/admin/price-alerts/seen-all", { method: "POST" }),
+  deleteAlert: (id: number) => request(`/api/admin/price-alerts/${id}`, { method: "DELETE" }),
 };
 
 // Types
@@ -170,6 +177,7 @@ export interface ComparisonResponse {
   course: { id: number; name: string; category: string; icon: string };
   competitors: { id: number; name: string }[];
   items: ComparisonItem[];
+  last_updated?: string | null;
 }
 export interface StrengthPoint {
   id: number; category: string; title: string;
@@ -193,4 +201,16 @@ export interface User {
 export interface AdminStats {
   total_courses: number; total_competitors: number; total_scripts: number;
   total_faqs: number; total_strength_points: number; active_promotions: number;
+  pending_price_alerts: number;
+}
+export interface PriceRow {
+  item_id: number; competitor_id: number | null;
+  course_name: string; course_icon: string;
+  item_name: string; competitor_name: string;
+  value_text: string; updated_at: string | null;
+}
+export interface PriceAlert {
+  id: number; course_name: string; competitor_name: string;
+  product_name: string; old_price: string; new_price: string;
+  detected_at: string | null; status: string;
 }

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { api, type Course, type AdminStats, type Promotion, type User } from "@/lib/api";
+import { api, type Course, type AdminStats, type Promotion, type User, type PriceAlert } from "@/lib/api";
 
 function StatCard({ label, value, color }: { label: string; value: number; color: string }) {
   return (
@@ -21,6 +21,7 @@ export default function AdminPage() {
   const [promos, setPromos] = useState<Promotion[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [tab, setTab] = useState<"courses" | "promotions" | "users">("courses");
+  const [pendingAlerts, setPendingAlerts] = useState(0);
   const [newPromoTitle, setNewPromoTitle] = useState("");
   const [newPromoContent, setNewPromoContent] = useState("");
   const [newPromoEnd, setNewPromoEnd] = useState("");
@@ -50,7 +51,10 @@ export default function AdminPage() {
 
   const loadAll = () => {
     Promise.all([api.adminStats(), api.courses(), api.activePromotions(), api.adminUsers()])
-      .then(([s, c, p, us]) => { setStats(s); setCourses(c); setPromos(p); setUsers(us); })
+      .then(([s, c, p, us]) => {
+        setStats(s); setCourses(c); setPromos(p); setUsers(us);
+        setPendingAlerts(s.pending_price_alerts ?? 0);
+      })
       .finally(() => setLoading(false));
   };
 
@@ -130,6 +134,31 @@ export default function AdminPage() {
           <StatCard label="FAQ"              value={stats.total_faqs}           color="#22c55e" />
           <StatCard label="강점 포인트"       value={stats.total_strength_points} color="#6b92ff" />
           <StatCard label="활성 프로모션"     value={stats.active_promotions}    color="#ef4444" />
+        </div>
+
+        {/* 가격 관리 바로가기 */}
+        <div className="rounded-xl p-5 flex items-center justify-between"
+             style={{ background: "var(--surface)", border: pendingAlerts > 0 ? "1.5px solid #FBBF24" : "1px solid var(--border)" }}>
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">💰</span>
+            <div>
+              <p className="font-semibold text-sm" style={{ color: "var(--text)" }}>가격 관리</p>
+              <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
+                경쟁사 수강료 직접 수정 · 가격 변동 알림 확인
+              </p>
+            </div>
+            {pendingAlerts > 0 && (
+              <span className="text-xs font-bold px-2 py-0.5 rounded-full animate-pulse"
+                    style={{ background: "#DC2626", color: "white" }}>
+                미확인 {pendingAlerts}건
+              </span>
+            )}
+          </div>
+          <Link href="/admin/prices"
+                className="text-sm px-4 py-2 rounded-lg font-semibold transition"
+                style={{ background: "var(--accent)", color: "white" }}>
+            가격 관리 →
+          </Link>
         </div>
 
         {/* 탭 */}

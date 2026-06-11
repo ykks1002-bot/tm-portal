@@ -8,6 +8,15 @@ interface EProduct { name: string; price: string; features: string[] }
 interface CProduct { name: string; price: string }
 interface CompInfo  { id: number; name: string; products: CProduct[]; advantages: string[] }
 
+// ── 카테고리 정의 ─────────────────────────────────────────────────────────────
+const CATEGORIES = [
+  { key: "all",  label: "전체" },
+  { key: "전문자격", label: "전문자격" },
+  { key: "학력인증", label: "학력인증" },
+  { key: "기술자격", label: "기술자격" },
+  { key: "공무원",   label: "공무원" },
+] as const;
+
 // ── 데이터 파싱 ───────────────────────────────────────────────────────────────
 function parseEduwill(comp: ComparisonResponse): EProduct[] {
   return comp.items
@@ -47,7 +56,7 @@ function parseCompetitor(comp: ComparisonResponse, cid: number): CompInfo | null
   return { id: cid, name: c.name, products, advantages };
 }
 
-// ── AI 스크립트 생성 (Gemini 무료 / Claude 유료) ─────────────────────────────
+// ── AI 스크립트 생성 ──────────────────────────────────────────────────────────
 function buildPrompt(course: string, sit: string, ew: EProduct[], ci: CompInfo): string {
   const sitLabel: Record<string, string> = {
     타사비교: "고객이 타사와 비교 중",
@@ -76,7 +85,7 @@ ${ci.advantages.slice(0,4).map(a => `• ${a}`).join("\n")}
 
 async function genWithGemini(key: string, prompt: string): Promise<string> {
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${key}`,
     {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -116,7 +125,6 @@ async function genWithClaude(key: string, prompt: string): Promise<string> {
 
 async function genScript(key: string, course: string, sit: string, ew: EProduct[], ci: CompInfo): Promise<string> {
   const prompt = buildPrompt(course, sit, ew, ci);
-  // Claude는 sk-ant- 로 시작, 나머지는 Gemini로 처리
   return key.startsWith("sk-ant-") ? genWithClaude(key, prompt) : genWithGemini(key, prompt);
 }
 
@@ -125,11 +133,16 @@ function isAuthError(msg: string) {
          msg.includes("Unauthorized") || msg.includes("API_KEY_INVALID") || msg.includes("403");
 }
 
+function fmtDate(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,"0")}.${String(d.getDate()).padStart(2,"0")}`;
+}
+
 // ── API 키 모달 ───────────────────────────────────────────────────────────────
 function ApiKeyModal({ onSave, onClose }: { onSave: (k: string) => void; onClose: () => void }) {
   const [v, setV] = useState("");
   const isClaude = v.startsWith("sk-ant-");
-  // Gemini: AIza... (구형) 또는 AQ. (신형) 또는 기타 Google AI 키
   const isGemini = !isClaude && v.length >= 10;
   const valid = isClaude || isGemini;
 
@@ -138,27 +151,21 @@ function ApiKeyModal({ onSave, onClose }: { onSave: (k: string) => void; onClose
       <div className="rounded-2xl p-6 max-w-sm w-full mx-4" style={{ background: "var(--surface)", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
         <h2 className="font-bold text-base mb-3" style={{ color: "var(--eduwill-navy)" }}>🔑 AI 스크립트 API 키</h2>
 
-        {/* Gemini 추천 */}
         <div className="rounded-xl p-3 mb-3" style={{ background: "#F0FDF4", border: "1px solid #BBF7D0" }}>
           <div className="flex items-center gap-2 mb-1">
             <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: "#16A34A", color: "white" }}>무료</span>
             <span className="text-xs font-bold" style={{ color: "#15803D" }}>Google Gemini (추천)</span>
           </div>
-          <p className="text-xs" style={{ color: "#166534" }}>
-            aistudio.google.com → Get API key → 무료 발급 (카드 불필요)
-          </p>
+          <p className="text-xs" style={{ color: "#166534" }}>aistudio.google.com → Get API key → 무료 발급 (카드 불필요)</p>
           <p className="text-xs mt-0.5" style={{ color: "#166534", opacity: 0.8 }}>키 형식: AQ... 또는 AIza...</p>
         </div>
 
-        {/* Claude */}
         <div className="rounded-xl p-3 mb-4" style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
           <div className="flex items-center gap-2 mb-1">
             <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: "#6B7280", color: "white" }}>유료</span>
             <span className="text-xs font-bold" style={{ color: "var(--text-muted)" }}>Claude (Anthropic)</span>
           </div>
-          <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-            console.anthropic.com → API Keys → 키 형식: sk-ant-...
-          </p>
+          <p className="text-xs" style={{ color: "var(--text-muted)" }}>console.anthropic.com → API Keys → 키 형식: sk-ant-...</p>
         </div>
 
         <input type="password"
@@ -169,9 +176,7 @@ function ApiKeyModal({ onSave, onClose }: { onSave: (k: string) => void; onClose
                style={{ border: `1.5px solid ${valid ? "#16A34A" : "var(--border)"}`, background: "var(--surface2)", color: "var(--text)" }} />
 
         {v && !valid && (
-          <p className="text-xs mb-2" style={{ color: "#DC2626" }}>
-            키를 10자 이상 입력해주세요
-          </p>
+          <p className="text-xs mb-2" style={{ color: "#DC2626" }}>키를 10자 이상 입력해주세요</p>
         )}
 
         <div className="flex gap-2">
@@ -224,9 +229,14 @@ function HomeInner() {
   const [aiScript, setAiScript]         = useState("");
   const [scriptLoading, setScriptLoading] = useState(false);
   const [scriptErr, setScriptErr]       = useState("");
-  const [copied, setCopied]             = useState<string | null>(null); // scriptId or "ai"
+  const [copied, setCopied]             = useState<string | null>(null);
   const [apiKey, setApiKey]             = useState("");
   const [showModal, setShowModal]       = useState(false);
+
+  // Stage 4: 카테고리 필터 + 검색
+  const [category, setCategory]         = useState<string>("all");
+  const [search, setSearch]             = useState("");
+
   const scriptEl = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -279,6 +289,13 @@ function HomeInner() {
     localStorage.setItem("claude_api_key", k); setApiKey(k); setShowModal(false);
   }, []);
 
+  // 카테고리 + 검색 필터 적용
+  const filteredCourses = courses.filter(c => {
+    const catMatch = category === "all" || c.category === category;
+    const searchMatch = !search || c.name.includes(search);
+    return catMatch && searchMatch;
+  });
+
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center" style={{ background: "var(--bg)" }}>
       <div className="w-10 h-10 rounded-full border-[3px] animate-spin"
@@ -289,10 +306,7 @@ function HomeInner() {
   const course  = courses.find(c => c.id === courseId);
   const ewProds = comp ? parseEduwill(comp) : [];
   const ci      = (comp && competitorId !== null) ? parseCompetitor(comp, competitorId) : null;
-
-  // 현재 상황에 맞는 사전 스크립트
   const preScripts = scripts.filter(s => s.situation_tag === sit);
-  // sk-ant- 로 시작하면 Claude, 나머지(AIza, AQ. 등)는 모두 Gemini
   const apiLabel   = apiKey.startsWith("sk-ant-") ? "Claude" : "Gemini";
 
   return (
@@ -322,11 +336,50 @@ function HomeInner() {
         </div>
       </header>
 
-      {/* ── 과목 탭 ── */}
+      {/* ── 과목 선택 영역 ── */}
       <div style={{ background: "var(--surface)", borderBottom: "2px solid var(--eduwill-yellow)" }}>
-        <div className="max-w-screen-xl mx-auto px-4 sm:px-6">
+        <div className="max-w-screen-xl mx-auto px-4 sm:px-6 pt-2">
+
+          {/* 카테고리 탭 + 검색 */}
+          <div className="flex items-center gap-3 mb-2 flex-wrap">
+            <div className="flex gap-1">
+              {CATEGORIES.map(cat => (
+                <button key={cat.key} onClick={() => setCategory(cat.key)}
+                        className="px-3 py-1 rounded-full text-xs font-semibold transition"
+                        style={{
+                          background: category === cat.key ? "var(--eduwill-navy)" : "var(--surface2)",
+                          color:      category === cat.key ? "white" : "var(--text-muted)",
+                          border:     category === cat.key ? "none" : "1px solid var(--border)",
+                        }}>
+                  {cat.label}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-2 ml-auto">
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="과목 검색…"
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  className="text-xs px-3 py-1.5 pl-7 rounded-lg outline-none w-32 transition"
+                  style={{ background: "var(--surface2)", border: "1px solid var(--border)", color: "var(--text)" }}
+                />
+                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs" style={{ color: "var(--text-muted)" }}>🔍</span>
+                {search && (
+                  <button onClick={() => setSearch("")}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-xs"
+                          style={{ color: "var(--text-muted)" }}>✕</button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* 과목 탭 */}
           <div className="flex gap-0.5 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
-            {courses.map(c => (
+            {filteredCourses.length === 0 ? (
+              <p className="text-xs py-3 px-1" style={{ color: "var(--text-muted)" }}>검색 결과 없음</p>
+            ) : filteredCourses.map(c => (
               <button key={c.id} onClick={() => setCourseId(c.id)}
                       className="shrink-0 flex items-center gap-1.5 px-3 py-3 text-xs font-semibold transition border-b-2 whitespace-nowrap"
                       style={{
@@ -412,10 +465,17 @@ function HomeInner() {
                     <span className="text-xs font-bold block text-gray-400">경쟁사</span>
                     <span className="text-sm font-bold text-gray-800">{ci?.name || "—"} {course?.name}</span>
                   </div>
-                  {ci && (
-                    <span className="text-xs px-2.5 py-1 rounded-full font-medium"
-                          style={{ background: "#F3F4F6", color: "#6B7280" }}>{ci.products.length}개 상품</span>
-                  )}
+                  <div className="flex flex-col items-end gap-1">
+                    {ci && (
+                      <span className="text-xs px-2.5 py-1 rounded-full font-medium"
+                            style={{ background: "#F3F4F6", color: "#6B7280" }}>{ci.products.length}개 상품</span>
+                    )}
+                    {comp.last_updated && (
+                      <span className="text-xs" style={{ color: "#9CA3AF" }}>
+                        확인: {fmtDate(comp.last_updated)}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 {ci ? (
                   <div className="p-4 space-y-4">
@@ -479,7 +539,7 @@ function HomeInner() {
                   ))}
                 </div>
 
-                {/* ── 사전 작성 스크립트 (무료, 기본) ── */}
+                {/* 사전 작성 스크립트 */}
                 {preScripts.length > 0 && (
                   <div className="mb-5">
                     <p className="text-xs font-bold mb-2 flex items-center gap-1.5" style={{ color: "var(--text-muted)" }}>
@@ -513,7 +573,7 @@ function HomeInner() {
                   </div>
                 )}
 
-                {/* ── AI 생성 스크립트 (선택) ── */}
+                {/* AI 생성 스크립트 */}
                 <div>
                   <p className="text-xs font-bold mb-2 flex items-center gap-1.5" style={{ color: "var(--text-muted)" }}>
                     <span className="px-2 py-0.5 rounded-full text-white text-xs"
