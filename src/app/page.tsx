@@ -179,6 +179,27 @@ async function genWithGemini(key: string, prompt: string): Promise<string> {
   throw new Error(`모든 Gemini 모델 할당량 초과. 마지막 오류: ${lastErr}`);
 }
 
+async function genWithGroq(key: string, prompt: string): Promise<string> {
+  const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${key}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "llama-3.3-70b-versatile",
+      messages: [{ role: "user", content: prompt }],
+      max_tokens: 600,
+    }),
+  });
+  if (!res.ok) {
+    const e = await res.json().catch(() => ({})) as { error?: { message?: string } };
+    throw new Error(e.error?.message || `Groq 오류 ${res.status}`);
+  }
+  const d = await res.json() as { choices: { message: { content: string } }[] };
+  return d.choices?.[0]?.message?.content || "";
+}
+
 async function genWithClaude(key: string, prompt: string): Promise<string> {
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
@@ -204,7 +225,17 @@ async function genWithClaude(key: string, prompt: string): Promise<string> {
 
 async function genScript(key: string, course: string, sit: string, ew: EProduct[], ci: CompInfo): Promise<string> {
   const prompt = buildPrompt(course, sit, ew, ci);
-  return key.startsWith("sk-ant-") ? genWithClaude(key, prompt) : genWithGemini(key, prompt);
+  if (key.startsWith("sk-ant-")) return genWithClaude(key, prompt);
+  if (key.startsWith("gsk_"))    return genWithGroq(key, prompt);
+  return genWithGemini(key, prompt);
+}
+
+function detectKeyType(key: string): "groq" | "claude" | "gemini" | "" {
+  if (!key) return "";
+  if (key.startsWith("sk-ant-")) return "claude";
+  if (key.startsWith("gsk_"))    return "groq";
+  if (key.length >= 10)          return "gemini";
+  return "";
 }
 
 function isAuthError(msg: string) {
@@ -215,48 +246,80 @@ function isAuthError(msg: string) {
 // ── API 키 모달 ───────────────────────────────────────────────────────────────
 function ApiKeyModal({ onSave, onClose }: { onSave: (k: string) => void; onClose: () => void }) {
   const [v, setV] = useState("");
-  const isClaude = v.startsWith("sk-ant-");
-  const isGemini = !isClaude && v.length >= 10;
-  const valid = isClaude || isGemini;
+  const keyType = detectKeyType(v);
+  const valid = keyType !== "";
+
+  const labelMap: Record<string, string> = {
+    groq: "Groq 저장",
+    claude: "Claude 저장",
+    gemini: "Gemini 저장",
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.6)" }}>
-      <div className="rounded-2xl p-6 max-w-sm w-full mx-4" style={{ background: "var(--surface)", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
-        <h2 className="font-bold text-base mb-3" style={{ color: "var(--eduwill-navy)" }}>🔑 AI 스크립트 API 키</h2>
+      <div className="rounded-2xl p-6 max-w-md w-full mx-4" style={{ background: "var(--surface)", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
+        <h2 className="font-bold text-base mb-4" style={{ color: "var(--eduwill-navy)" }}>🔑 AI 스크립트 API 키</h2>
 
-        <div className="rounded-xl p-3 mb-3" style={{ background: "#F0FDF4", border: "1px solid #BBF7D0" }}>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: "#16A34A", color: "white" }}>무료</span>
-            <span className="text-xs font-bold" style={{ color: "#15803D" }}>Google Gemini (추천)</span>
+        {/* Groq - 최우선 추천 */}
+        <div className="rounded-xl p-3.5 mb-3" style={{ background: "#F0FDF4", border: "2px solid #86EFAC" }}>
+          <div className="flex items-center gap-2 mb-1.5">
+            <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: "#16A34A", color: "white" }}>무료 · 추천</span>
+            <span className="text-xs font-bold" style={{ color: "#15803D" }}>Groq (Llama 3.3)</span>
+            <span className="text-xs ml-auto" style={{ color: "#16A34A" }}>한국 정상작동 ✓</span>
           </div>
-          <p className="text-xs" style={{ color: "#166534" }}>aistudio.google.com → Get API key → 무료 발급 (카드 불필요)</p>
-          <p className="text-xs mt-0.5" style={{ color: "#166534", opacity: 0.8 }}>키 형식: AQ... 또는 AIza...</p>
+          <p className="text-xs" style={{ color: "#166534" }}>
+            <strong>console.groq.com</strong> → API Keys → Create API Key → 무료 발급
+          </p>
+          <p className="text-xs mt-0.5" style={{ color: "#166534", opacity: 0.8 }}>
+            키 형식: <strong>gsk_...</strong> · 하루 14,400회 무료 · 카드 불필요
+          </p>
         </div>
 
+        {/* Gemini */}
+        <div className="rounded-xl p-3 mb-3" style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: "#F59E0B", color: "white" }}>무료 (지역제한)</span>
+            <span className="text-xs font-bold" style={{ color: "var(--text-muted)" }}>Google Gemini</span>
+          </div>
+          <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+            aistudio.google.com → Get API key · 키 형식: AIza... 또는 AQ...
+          </p>
+          <p className="text-xs mt-0.5" style={{ color: "#D97706" }}>
+            ⚠️ 한국 계정에서 할당량 0 오류 발생 시 Groq 사용 권장
+          </p>
+        </div>
+
+        {/* Claude */}
         <div className="rounded-xl p-3 mb-4" style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
           <div className="flex items-center gap-2 mb-1">
             <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: "#6B7280", color: "white" }}>유료</span>
             <span className="text-xs font-bold" style={{ color: "var(--text-muted)" }}>Claude (Anthropic)</span>
           </div>
-          <p className="text-xs" style={{ color: "var(--text-muted)" }}>console.anthropic.com → API Keys → 키 형식: sk-ant-...</p>
+          <p className="text-xs" style={{ color: "var(--text-muted)" }}>console.anthropic.com → API Keys · 키 형식: sk-ant-...</p>
         </div>
 
         <input type="password"
-               placeholder="AQ... / AIza... (Gemini) 또는 sk-ant-... (Claude)"
+               placeholder="gsk_... (Groq) / AIza... (Gemini) / sk-ant-... (Claude)"
                value={v} onChange={e => setV(e.target.value)}
                onKeyDown={e => e.key === "Enter" && valid && onSave(v)}
                className="w-full px-4 py-2.5 rounded-xl text-sm mb-3 outline-none"
-               style={{ border: `1.5px solid ${valid ? "#16A34A" : "var(--border)"}`, background: "var(--surface2)", color: "var(--text)" }} />
+               style={{
+                 border: `1.5px solid ${valid ? "#16A34A" : "var(--border)"}`,
+                 background: "var(--surface2)", color: "var(--text)",
+               }} />
 
         {v && !valid && (
           <p className="text-xs mb-2" style={{ color: "#DC2626" }}>키를 10자 이상 입력해주세요</p>
+        )}
+        {keyType === "groq" && (
+          <p className="text-xs mb-2 font-medium" style={{ color: "#16A34A" }}>✓ Groq API 키 감지됨</p>
         )}
 
         <div className="flex gap-2">
           <button onClick={() => valid && onSave(v)} disabled={!valid}
                   className="flex-1 py-2 rounded-xl text-sm font-bold disabled:opacity-40"
                   style={{ background: "var(--eduwill-yellow)", color: "var(--eduwill-navy)" }}>
-            {isGemini ? "Gemini 저장" : isClaude ? "Claude 저장" : "저장"}
+            {keyType ? labelMap[keyType] : "저장"}
           </button>
           <button onClick={onClose} className="px-4 py-2 rounded-xl text-sm font-bold"
                   style={{ background: "var(--surface2)", color: "var(--text-muted)" }}>닫기</button>
@@ -459,7 +522,7 @@ function HomeInner() {
   const ewProds = comp ? parseEduwill(comp) : [];
   const ci      = (comp && competitorId !== null) ? parseCompetitor(comp, competitorId) : null;
   const preScripts = scripts.filter(s => s.situation_tag === sit);
-  const apiLabel   = apiKey.startsWith("sk-ant-") ? "Claude" : "Gemini";
+  const apiLabel   = apiKey.startsWith("sk-ant-") ? "Claude" : apiKey.startsWith("gsk_") ? "Groq" : "Gemini";
   const dataAge    = getDataAge(comp?.last_updated);
   const priceSummary = calcPriceSummary(ewProds, ci);
 
