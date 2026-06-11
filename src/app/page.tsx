@@ -130,21 +130,53 @@ ${ci.advantages.slice(0,4).map(a => `• ${a}`).join("\n")}
 - 3~4문장, 200자 내외로 간결하게`;
 }
 
+const GEMINI_FALLBACK_MODELS = [
+  "gemini-2.0-flash",
+  "gemini-2.0-flash-lite",
+  "gemini-1.5-flash-8b",
+  "gemini-1.5-flash",
+];
+
 async function genWithGemini(key: string, prompt: string): Promise<string> {
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${key}`,
-    {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
+  let lastErr = "";
+  for (const model of GEMINI_FALLBACK_MODELS) {
+    try {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
+        }
+      );
+      const data = await res.json() as {
+        candidates?: { content: { parts: { text: string }[] } }[];
+        error?: { message?: string; code?: number };
+      };
+      if (!res.ok || data.error) {
+        const msg = data.error?.message || `Gemini 오류 ${res.status}`;
+        // 할당량 초과 또는 모델 미지원 → 다음 모델 시도
+        if (res.status === 429 || res.status === 403 ||
+            msg.toLowerCase().includes("quota") ||
+            msg.toLowerCase().includes("exhausted") ||
+            msg.toLowerCase().includes("not found") ||
+            msg.toLowerCase().includes("limit")) {
+          lastErr = `${model}: ${msg.slice(0, 80)}`;
+          continue;
+        }
+        throw new Error(msg);
+      }
+      return data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    } catch (e) {
+      const msg = (e as Error).message;
+      if (msg.includes("quota") || msg.includes("exhausted") || msg.includes("limit") || msg.includes("not found")) {
+        lastErr = `${model}: ${msg.slice(0, 80)}`;
+        continue;
+      }
+      throw e;
     }
-  );
-  if (!res.ok) {
-    const e = await res.json().catch(() => ({})) as { error?: { message?: string } };
-    throw new Error(e.error?.message || `Gemini 오류 ${res.status}`);
   }
-  const d = await res.json() as { candidates: { content: { parts: { text: string }[] } }[] };
-  return d.candidates?.[0]?.content?.parts?.[0]?.text || "";
+  throw new Error(`모든 Gemini 모델 할당량 초과. 마지막 오류: ${lastErr}`);
 }
 
 async function genWithClaude(key: string, prompt: string): Promise<string> {
