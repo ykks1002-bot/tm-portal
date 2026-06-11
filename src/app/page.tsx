@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef, Suspense } from "react";
-import { api, type Course, type ComparisonResponse, type Script } from "@/lib/api";
+import { api, type Course, type ComparisonResponse, type Script, type ScrapeStatus } from "@/lib/api";
 
 // ── 타입 ──────────────────────────────────────────────────────────────────────
 interface EProduct { name: string; price: string; features: string[] }
@@ -54,6 +54,53 @@ function parseCompetitor(comp: ComparisonResponse, cid: number): CompInfo | null
     }
   }
   return { id: cid, name: c.name, products, advantages };
+}
+
+// ── 가격 파싱 / 비교 ─────────────────────────────────────────────────────────
+function parsePrice(str: string): number | null {
+  const m = str.match(/[\d,]+/);
+  if (!m) return null;
+  const n = parseInt(m[0].replace(/,/g, ""), 10);
+  return n >= 10000 ? n : null;
+}
+
+function fmtWon(n: number): string {
+  return `${n.toLocaleString("ko-KR")}원`;
+}
+
+interface PriceSummary {
+  eduwillMin: number | null;
+  competitorMin: number | null;
+  diff: number | null;
+  eduwillCheaper: boolean;
+  hasPrices: boolean;
+}
+
+function calcPriceSummary(ew: EProduct[], ci: CompInfo | null): PriceSummary {
+  const ewPrices = ew.map(p => parsePrice(p.price)).filter((n): n is number => n !== null);
+  const ciPrices = ci?.products.map(p => parsePrice(p.price)).filter((n): n is number => n !== null) ?? [];
+  const eduwillMin = ewPrices.length ? Math.min(...ewPrices) : null;
+  const competitorMin = ciPrices.length ? Math.min(...ciPrices) : null;
+  const diff = eduwillMin !== null && competitorMin !== null ? competitorMin - eduwillMin : null;
+  return {
+    eduwillMin,
+    competitorMin,
+    diff,
+    eduwillCheaper: diff !== null && diff > 0,
+    hasPrices: eduwillMin !== null && competitorMin !== null,
+  };
+}
+
+// ── 데이터 신선도 ──────────────────────────────────────────────────────────────
+interface DataAge { hours: number; label: string; color: string; bg: string; warn: boolean }
+
+function getDataAge(isoDate: string | null | undefined): DataAge {
+  if (!isoDate) return { hours: 9999, label: "업데이트 기록 없음", color: "#DC2626", bg: "#FEF2F2", warn: true };
+  const hours = Math.floor((Date.now() - new Date(isoDate).getTime()) / 3_600_000);
+  if (hours < 8)  return { hours, label: `${hours}시간 전 확인됨`, color: "#16A34A", bg: "#F0FDF4", warn: false };
+  if (hours < 24) return { hours, label: `${hours}시간 전 확인됨`, color: "#D97706", bg: "#FFFBEB", warn: true };
+  const days = Math.floor(hours / 24);
+  return { hours, label: `${days}일 전 확인됨 — 가격이 변경됐을 수 있습니다`, color: "#DC2626", bg: "#FEF2F2", warn: true };
 }
 
 // ── AI 스크립트 생성 ──────────────────────────────────────────────────────────
@@ -133,12 +180,6 @@ function isAuthError(msg: string) {
          msg.includes("Unauthorized") || msg.includes("API_KEY_INVALID") || msg.includes("403");
 }
 
-function fmtDate(iso: string | null | undefined): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  return `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,"0")}.${String(d.getDate()).padStart(2,"0")}`;
-}
-
 // ── API 키 모달 ───────────────────────────────────────────────────────────────
 function ApiKeyModal({ onSave, onClose }: { onSave: (k: string) => void; onClose: () => void }) {
   const [v, setV] = useState("");
@@ -195,7 +236,7 @@ function ApiKeyModal({ onSave, onClose }: { onSave: (k: string) => void; onClose
 
 // ── 가격 배지 ─────────────────────────────────────────────────────────────────
 function PriceBadge({ price, navy }: { price: string; navy?: boolean }) {
-  const unknown = price === "가격 문의";
+  const unknown = price === "가격 문의" || price === "미확인";
   if (navy) return (
     <span className="shrink-0 text-xs font-bold px-3 py-1 rounded-full"
           style={{ background: "var(--eduwill-yellow)", color: "var(--eduwill-navy)" }}>{price}</span>
@@ -203,12 +244,55 @@ function PriceBadge({ price, navy }: { price: string; navy?: boolean }) {
   return (
     <span className="shrink-0 text-xs font-bold px-3 py-1 rounded-full"
           style={{ background: unknown ? "#F3F4F6" : "#FEF2F2", color: unknown ? "#9CA3AF" : "#DC2626" }}>
-      {price}
+      {unknown ? "현재가 미확인" : price}
     </span>
   );
 }
 
-// ── 메인 ─────────────────────────────────────────────────────────────────────
+// ── 가격 비교 요약 배너 ────────────────────────────────────────────────────────
+function PriceSummaryBanner({ summary, competitorName }: { summary: PriceSummary; competitorName: string }) {
+  if (!summary.hasPrices) {
+    return (
+      <div className="rounded-xl px-4 py-3 flex items-center gap-2 mb-4 text-xs"
+           style={{ background: "#F9FAFB", border: "1px solid var(--border)", color: "var(--text-muted)" }}>
+        <span>⚠️</span>
+        <span><strong>{competitorName}</strong> 현재 가격 자동 수집 불가 — 수동 확인 또는 관리자 업데이트 필요</span>
+      </div>
+    );
+  }
+  const { diff, eduwillCheaper, eduwillMin, competitorMin } = summary;
+  if (diff === null) return null;
+  const absDiff = Math.abs(diff);
+
+  return (
+    <div className="rounded-xl px-4 py-3 flex items-center justify-between gap-3 mb-4"
+         style={{
+           background: eduwillCheaper ? "#F0FDF4" : "#FEF2F2",
+           border: `1.5px solid ${eduwillCheaper ? "#86EFAC" : "#FECACA"}`,
+         }}>
+      <div className="flex items-center gap-2.5">
+        <span className="text-lg">{eduwillCheaper ? "💚" : "⚠️"}</span>
+        <div>
+          <p className="text-sm font-bold" style={{ color: eduwillCheaper ? "#166534" : "#991B1B" }}>
+            {eduwillCheaper
+              ? `에듀윌이 ${fmtWon(absDiff)} 더 저렴`
+              : `${competitorName}이 ${fmtWon(absDiff)} 더 저렴`}
+          </p>
+          <p className="text-xs mt-0.5" style={{ color: eduwillCheaper ? "#16A34A" : "#DC2626" }}>
+            에듀윌 최저 {fmtWon(eduwillMin!)} vs {competitorName} 최저 {fmtWon(competitorMin!)}
+          </p>
+        </div>
+      </div>
+      {!eduwillCheaper && (
+        <span className="text-xs px-2.5 py-1 rounded-full font-medium shrink-0"
+              style={{ background: "rgba(239,68,68,0.1)", color: "#DC2626" }}>
+          가격 외 강점 부각 필요
+        </span>
+      )}
+    </div>
+  );
+}
+
 const SITS = [
   { k: "타사비교", l: "⚔️ 타사 비교 중" },
   { k: "가격이의", l: "💸 가격 이의" },
@@ -233,20 +317,48 @@ function HomeInner() {
   const [apiKey, setApiKey]             = useState("");
   const [showModal, setShowModal]       = useState(false);
 
-  // Stage 4: 카테고리 필터 + 검색
   const [category, setCategory]         = useState<string>("all");
   const [search, setSearch]             = useState("");
+
+  // 관리자 기능
+  const [isAdmin, setIsAdmin]           = useState(false);
+  const [scrapeStatus, setScrapeStatus] = useState<ScrapeStatus | null>(null);
+  const [scrapeTriggered, setScrapeTriggered] = useState(false);
 
   const scriptEl = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setApiKey(localStorage.getItem("claude_api_key") || "");
+    const u = localStorage.getItem("tm_user");
+    if (u) {
+      try {
+        const { role } = JSON.parse(u);
+        if (role === "admin" || role === "superadmin") setIsAdmin(true);
+      } catch {}
+    }
     api.courses().then(cs => {
       const active = cs.filter(c => c.is_active).sort((a, b) => a.sort_order - b.sort_order);
       setCourses(active);
       if (active.length) setCourseId(active[0].id);
     }).finally(() => setLoading(false));
   }, []);
+
+  // 관리자용 스크래핑 상태 폴링
+  useEffect(() => {
+    if (!isAdmin) return;
+    const fetchStatus = () => {
+      api.scrapeStatus().then(setScrapeStatus).catch(() => {});
+    };
+    fetchStatus();
+    const id = setInterval(fetchStatus, scrapeTriggered ? 3000 : 30000);
+    return () => clearInterval(id);
+  }, [isAdmin, scrapeTriggered]);
+
+  useEffect(() => {
+    if (scrapeStatus && !scrapeStatus.is_running) {
+      setScrapeTriggered(false);
+    }
+  }, [scrapeStatus]);
 
   useEffect(() => {
     if (!courseId) return;
@@ -289,7 +401,15 @@ function HomeInner() {
     localStorage.setItem("claude_api_key", k); setApiKey(k); setShowModal(false);
   }, []);
 
-  // 카테고리 + 검색 필터 적용
+  const handleTriggerScrape = useCallback(async () => {
+    try {
+      await api.triggerScrape();
+      setScrapeTriggered(true);
+    } catch (e) {
+      alert((e as Error).message);
+    }
+  }, []);
+
   const filteredCourses = courses.filter(c => {
     const catMatch = category === "all" || c.category === category;
     const searchMatch = !search || c.name.includes(search);
@@ -308,6 +428,8 @@ function HomeInner() {
   const ci      = (comp && competitorId !== null) ? parseCompetitor(comp, competitorId) : null;
   const preScripts = scripts.filter(s => s.situation_tag === sit);
   const apiLabel   = apiKey.startsWith("sk-ant-") ? "Claude" : "Gemini";
+  const dataAge    = getDataAge(comp?.last_updated);
+  const priceSummary = calcPriceSummary(ewProds, ci);
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
@@ -315,7 +437,7 @@ function HomeInner() {
 
       {/* ── 헤더 ── */}
       <header style={{ background: "var(--eduwill-navy)", borderBottom: "3px solid var(--eduwill-yellow)" }}>
-        <div className="max-w-screen-xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
+        <div className="max-w-screen-xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm"
                  style={{ background: "var(--eduwill-yellow)", color: "var(--eduwill-navy)" }}>TM</div>
@@ -324,15 +446,38 @@ function HomeInner() {
               <div className="text-xs" style={{ color: "rgba(255,255,255,0.5)" }}>타사 비교 고객 즉시 응대</div>
             </div>
           </div>
-          <button onClick={() => setShowModal(true)}
-                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-medium transition"
-                  style={{
-                    background: apiKey ? "rgba(255,255,255,0.1)" : "rgba(255,210,0,0.25)",
-                    color:      apiKey ? "rgba(255,255,255,0.65)" : "var(--eduwill-yellow)",
-                    border:     `1px solid ${apiKey ? "rgba(255,255,255,0.2)" : "var(--eduwill-yellow)"}`,
-                  }}>
-            🔑 {apiKey ? `AI (${apiLabel})` : "AI 키 설정"}
-          </button>
+
+          <div className="flex items-center gap-2">
+            {/* 관리자: 데이터 업데이트 버튼 */}
+            {isAdmin && (
+              <button
+                onClick={handleTriggerScrape}
+                disabled={scrapeStatus?.is_running || scrapeTriggered}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-medium transition disabled:opacity-50"
+                style={{
+                  background: scrapeStatus?.is_running ? "rgba(255,210,0,0.2)" : "rgba(255,255,255,0.1)",
+                  color: "rgba(255,255,255,0.8)",
+                  border: "1px solid rgba(255,255,255,0.2)",
+                }}>
+                {scrapeStatus?.is_running ? (
+                  <>
+                    <span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                    업데이트 중…
+                  </>
+                ) : "🔄 가격 업데이트"}
+              </button>
+            )}
+
+            <button onClick={() => setShowModal(true)}
+                    className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-medium transition"
+                    style={{
+                      background: apiKey ? "rgba(255,255,255,0.1)" : "rgba(255,210,0,0.25)",
+                      color:      apiKey ? "rgba(255,255,255,0.65)" : "var(--eduwill-yellow)",
+                      border:     `1px solid ${apiKey ? "rgba(255,255,255,0.2)" : "var(--eduwill-yellow)"}`,
+                    }}>
+              🔑 {apiKey ? `AI (${apiLabel})` : "AI 키 설정"}
+            </button>
+          </div>
         </div>
       </header>
 
@@ -402,24 +547,43 @@ function HomeInner() {
           </div>
         ) : comp && (
           <>
-            {/* ── 경쟁사 탭 ── */}
-            <div className="flex gap-2 flex-wrap mb-4">
-              <span className="text-xs font-bold self-center mr-1" style={{ color: "var(--text-muted)" }}>경쟁사</span>
-              {comp.competitors.map(c => (
-                <button key={c.id} onClick={() => { setCompetitorId(c.id); setAiScript(""); setScriptErr(""); }}
-                        className="px-4 py-2 rounded-xl text-sm font-bold transition"
-                        style={{
-                          background: competitorId === c.id ? "#1C2B5E" : "var(--surface)",
-                          color:      competitorId === c.id ? "white" : "var(--text-muted)",
-                          border:     competitorId === c.id ? "2px solid #1C2B5E" : "1.5px solid var(--border)",
-                          boxShadow:  competitorId === c.id ? "0 2px 8px rgba(28,43,94,0.2)" : "none",
-                        }}>
-                  {c.name}
-                </button>
-              ))}
+            {/* ── 데이터 신선도 + 경쟁사 선택 헤더 ── */}
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+              {/* 경쟁사 선택 */}
+              <div className="flex gap-2 flex-wrap items-center">
+                <span className="text-xs font-bold" style={{ color: "var(--text-muted)" }}>경쟁사 선택</span>
+                {comp.competitors.map(c => (
+                  <button key={c.id} onClick={() => { setCompetitorId(c.id); setAiScript(""); setScriptErr(""); }}
+                          className="px-4 py-2 rounded-xl text-sm font-bold transition"
+                          style={{
+                            background: competitorId === c.id ? "#1C2B5E" : "var(--surface)",
+                            color:      competitorId === c.id ? "white" : "var(--text-muted)",
+                            border:     competitorId === c.id ? "2px solid #1C2B5E" : "1.5px solid var(--border)",
+                            boxShadow:  competitorId === c.id ? "0 2px 8px rgba(28,43,94,0.2)" : "none",
+                          }}>
+                    {c.name}
+                  </button>
+                ))}
+              </div>
+
+              {/* 데이터 신선도 표시 */}
+              {comp.last_updated && (
+                <div className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-full"
+                     style={{ background: dataAge.bg, color: dataAge.color, border: `1px solid ${dataAge.color}30` }}>
+                  <span>{dataAge.warn ? "⚠️" : "✅"}</span>
+                  <span>{dataAge.label}</span>
+                  {isAdmin && !scrapeStatus?.is_running && (
+                    <button onClick={handleTriggerScrape}
+                            className="ml-1 font-bold underline">지금 갱신</button>
+                  )}
+                </div>
+              )}
             </div>
 
-            {/* ── 2컬럼 ── */}
+            {/* ── 가격 비교 요약 ── */}
+            {ci && <PriceSummaryBanner summary={priceSummary} competitorName={ci.name} />}
+
+            {/* ── 2컬럼 비교 ── */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-5">
 
               {/* 에듀윌 */}
@@ -431,6 +595,10 @@ function HomeInner() {
                     <span className="text-xs font-bold block" style={{ color: "var(--eduwill-yellow)" }}>에듀윌</span>
                     <span className="text-sm font-bold text-white">{course?.name}</span>
                   </div>
+                  <span className="ml-auto text-xs px-2 py-0.5 rounded-full font-bold"
+                        style={{ background: "var(--eduwill-yellow)", color: "var(--eduwill-navy)" }}>
+                    자사 상품
+                  </span>
                 </div>
                 <div className="p-4 space-y-3">
                   {ewProds.map((p, i) => (
@@ -465,17 +633,19 @@ function HomeInner() {
                     <span className="text-xs font-bold block text-gray-400">경쟁사</span>
                     <span className="text-sm font-bold text-gray-800">{ci?.name || "—"} {course?.name}</span>
                   </div>
-                  <div className="flex flex-col items-end gap-1">
-                    {ci && (
+                  {ci && (
+                    <div className="flex flex-col items-end gap-1">
                       <span className="text-xs px-2.5 py-1 rounded-full font-medium"
                             style={{ background: "#F3F4F6", color: "#6B7280" }}>{ci.products.length}개 상품</span>
-                    )}
-                    {comp.last_updated && (
-                      <span className="text-xs" style={{ color: "#9CA3AF" }}>
-                        확인: {fmtDate(comp.last_updated)}
-                      </span>
-                    )}
-                  </div>
+                      {/* 가격 미확인 항목 수 표시 */}
+                      {ci.products.filter(p => p.price === "가격 문의").length > 0 && (
+                        <span className="text-xs px-2 py-0.5 rounded-full"
+                              style={{ background: "#FEF3C7", color: "#D97706" }}>
+                          {ci.products.filter(p => p.price === "가격 문의").length}개 미확인
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
                 {ci ? (
                   <div className="p-4 space-y-4">
@@ -490,13 +660,17 @@ function HomeInner() {
                             <PriceBadge price={p.price} />
                           </div>
                         )) : (
-                          <div className="px-4 py-6 text-center text-xs" style={{ color: "var(--text-muted)" }}>상품 정보 없음</div>
+                          <div className="px-4 py-6 text-center text-xs" style={{ color: "var(--text-muted)" }}>
+                            상품 정보 없음
+                          </div>
                         )}
                       </div>
                     </div>
                     {ci.advantages.length > 0 && (
                       <div>
-                        <p className="text-xs font-bold mb-2" style={{ color: "var(--text-muted)" }}>에듀윌 차별점</p>
+                        <p className="text-xs font-bold mb-2" style={{ color: "var(--text-muted)" }}>
+                          에듀윌 차별점 <span className="font-normal opacity-70">(상담 포인트)</span>
+                        </p>
                         <div className="rounded-xl p-3 space-y-1.5" style={{ background: "#EFF6FF", border: "1px solid #BFDBFE" }}>
                           {ci.advantages.slice(0, 5).map((a, i) => (
                             <div key={i} className="flex items-start gap-2 text-xs" style={{ color: "#1D4ED8" }}>
@@ -520,6 +694,7 @@ function HomeInner() {
                 <div className="flex items-center gap-2">
                   <span className="text-base">💬</span>
                   <span className="text-sm font-bold text-white">상담 스크립트</span>
+                  {ci && <span className="text-xs text-white opacity-60">— {ci.name} 고객 응대용</span>}
                 </div>
               </div>
 

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { api, type Course, type AdminStats, type Promotion, type User, type PriceAlert } from "@/lib/api";
+import { api, type Course, type AdminStats, type Promotion, type User, type PriceAlert, type ScrapeStatus } from "@/lib/api";
 
 function StatCard({ label, value, color }: { label: string; value: number; color: string }) {
   return (
@@ -22,6 +22,8 @@ export default function AdminPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [tab, setTab] = useState<"courses" | "promotions" | "users">("courses");
   const [pendingAlerts, setPendingAlerts] = useState(0);
+  const [scrapeStatus, setScrapeStatus] = useState<ScrapeStatus | null>(null);
+  const [scrapeMsg, setScrapeMsg] = useState("");
   const [newPromoTitle, setNewPromoTitle] = useState("");
   const [newPromoContent, setNewPromoContent] = useState("");
   const [newPromoEnd, setNewPromoEnd] = useState("");
@@ -47,6 +49,7 @@ export default function AdminPage() {
       if (role !== "admin" && role !== "superadmin") { router.replace("/"); return; }
     }
     loadAll();
+    loadScrapeStatus();
   }, [router]);
 
   const loadAll = () => {
@@ -56,6 +59,27 @@ export default function AdminPage() {
         setPendingAlerts(s.pending_price_alerts ?? 0);
       })
       .finally(() => setLoading(false));
+  };
+
+  const loadScrapeStatus = () => {
+    api.scrapeStatus().then(setScrapeStatus).catch(() => {});
+  };
+
+  const handleTriggerScrape = async () => {
+    try {
+      await api.triggerScrape();
+      setScrapeMsg("가격 업데이트를 시작했습니다. 완료까지 2~5분 소요됩니다.");
+      loadScrapeStatus();
+      const poll = setInterval(() => {
+        api.scrapeStatus().then(s => {
+          setScrapeStatus(s);
+          if (!s.is_running) clearInterval(poll);
+        }).catch(() => clearInterval(poll));
+      }, 4000);
+    } catch (e) {
+      setScrapeMsg((e as Error).message);
+    }
+    setTimeout(() => setScrapeMsg(""), 8000);
   };
 
   const flash = (m: string) => { setMsg(m); setTimeout(() => setMsg(""), 3000); };
@@ -134,6 +158,49 @@ export default function AdminPage() {
           <StatCard label="FAQ"              value={stats.total_faqs}           color="#22c55e" />
           <StatCard label="강점 포인트"       value={stats.total_strength_points} color="#6b92ff" />
           <StatCard label="활성 프로모션"     value={stats.active_promotions}    color="#ef4444" />
+        </div>
+
+        {/* 데이터 자동수집 제어 */}
+        <div className="rounded-xl p-5"
+             style={{ background: "var(--surface)", border: scrapeStatus?.is_running ? "1.5px solid #3B82F6" : "1px solid var(--border)" }}>
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">🔄</span>
+              <div>
+                <p className="font-semibold text-sm" style={{ color: "var(--text)" }}>경쟁사 가격 자동수집</p>
+                <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
+                  {scrapeStatus?.is_running
+                    ? "수집 중… 완료까지 2~5분 소요"
+                    : scrapeStatus?.last_success_at
+                      ? `최근 성공: ${new Date(scrapeStatus.last_success_at).toLocaleString("ko-KR")}`
+                      : "6시간마다 자동 실행 · 서버 시작 5분 후 첫 실행"}
+                </p>
+                {scrapeStatus?.message && (
+                  <p className="text-xs mt-0.5 font-medium" style={{ color: scrapeStatus.is_running ? "#3B82F6" : "var(--text-muted)" }}>
+                    {scrapeStatus.message}
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              {scrapeStatus?.is_running && (
+                <span className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+              )}
+              <button
+                onClick={handleTriggerScrape}
+                disabled={scrapeStatus?.is_running}
+                className="text-sm px-4 py-2 rounded-lg font-semibold transition disabled:opacity-50"
+                style={{ background: scrapeStatus?.is_running ? "var(--surface2)" : "var(--accent)", color: scrapeStatus?.is_running ? "var(--text-muted)" : "white" }}>
+                {scrapeStatus?.is_running ? "수집 중…" : "지금 수집"}
+              </button>
+            </div>
+          </div>
+          {scrapeMsg && (
+            <p className="text-xs mt-3 px-3 py-2 rounded-lg"
+               style={{ background: "#EFF6FF", color: "#1D4ED8", border: "1px solid #BFDBFE" }}>
+              {scrapeMsg}
+            </p>
+          )}
         </div>
 
         {/* 가격 관리 바로가기 */}

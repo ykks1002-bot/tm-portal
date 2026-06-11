@@ -158,6 +158,10 @@ export const api = {
   markAlertSeen: (id: number) => request(`/api/admin/price-alerts/${id}/seen`, { method: "POST" }),
   markAllAlertsSeen: () => request("/api/admin/price-alerts/seen-all", { method: "POST" }),
   deleteAlert: (id: number) => request(`/api/admin/price-alerts/${id}`, { method: "DELETE" }),
+
+  // Scrape Control
+  triggerScrape: () => request<{ ok: boolean; message: string }>("/api/admin/scrape/trigger", { method: "POST" }),
+  scrapeStatus: () => request<ScrapeStatus>("/api/admin/scrape/status"),
 };
 
 // Types
@@ -213,4 +217,10 @@ export interface PriceAlert {
   id: number; course_name: string; competitor_name: string;
   product_name: string; old_price: string; new_price: string;
   detected_at: string | null; status: string;
+}
+export interface ScrapeStatus {
+  is_running: boolean;
+  last_run_at: string | null;
+  last_success_at: string | null;
+  message: string;
 }
