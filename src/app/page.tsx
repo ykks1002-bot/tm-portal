@@ -527,12 +527,11 @@ function AdminLoginModal({ onSuccess, onClose }: { onSuccess: () => void; onClos
 
 // ── 어드민 드롭다운 패널 ──────────────────────────────────────────────────────
 function AdminDropdown({ onClose, onLogout, courseId }: { onClose: () => void; onLogout: () => void; courseId: number | null }) {
-  const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
   const items = [
-    { icon: "🏠", label: "어드민 대시보드",     href: `${BASE_PATH}/admin` },
-    { icon: "💰", label: "가격 관리",           href: `${BASE_PATH}/admin/prices` },
-    { icon: "📅", label: "시험 정보 / 취업 전망", href: `${BASE_PATH}/admin/exam-info` },
-    { icon: "📚", label: "과목 관리",           href: `${BASE_PATH}/admin/courses` },
+    { icon: "🏠", label: "어드민 대시보드",      href: "/admin" },
+    { icon: "💰", label: "가격 관리",            href: "/admin/prices" },
+    { icon: "📅", label: "시험 정보 / 취업 전망", href: "/admin/exam-info" },
+    { icon: "📚", label: "과목 관리",            href: "/admin/courses" },
   ];
   return (
     <>
