@@ -3,12 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { api, type ExamSchedule, type EmploymentStat } from "@/lib/api";
-
-const isStatic = () =>
-  typeof window !== "undefined" &&
-  (window.location.hostname.includes("github.io") ||
-    process.env.NEXT_PUBLIC_STATIC === "true");
+import { api, isStatic, type ExamSchedule, type EmploymentStat } from "@/lib/api";
 
 const COURSES = [
   { id: 1, name: "공인중개사", icon: "🏠" },

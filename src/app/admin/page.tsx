@@ -34,10 +34,14 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState("");
 
-  const isStaticMode = process.env.NEXT_PUBLIC_STATIC === "true" ||
-    (typeof window !== "undefined" && window.location.hostname.includes("github.io"));
+  const [isStaticMode, setIsStaticMode] = useState(true);
 
   useEffect(() => {
+    const customUrl = localStorage.getItem("tm_custom_api_url");
+    const onGitHub = process.env.NEXT_PUBLIC_STATIC === "true" || window.location.hostname.includes("github.io");
+    const staticMode = onGitHub && !customUrl;
+    setIsStaticMode(staticMode);
+
     const token = localStorage.getItem("tm_token");
     if (!token) { router.replace("/login"); return; }
     const u = localStorage.getItem("tm_user");
@@ -45,7 +49,7 @@ export default function AdminPage() {
       const role = JSON.parse(u).role;
       if (role !== "admin" && role !== "superadmin") { router.replace("/"); return; }
     }
-    if (isStaticMode) {
+    if (staticMode) {
       api.courses().then(cs => setCourses(cs)).finally(() => setLoading(false));
       return;
     }

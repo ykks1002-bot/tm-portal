@@ -1,11 +1,27 @@
-// 정적 모드 감지 (GitHub Pages 배포 시)
-const isStatic = (): boolean =>
-  typeof window !== "undefined" &&
-  (window.location.hostname.includes("github.io") ||
-    process.env.NEXT_PUBLIC_STATIC === "true");
-
-const BASE     = process.env.NEXT_PUBLIC_API_URL ?? "";
+const BASE      = process.env.NEXT_PUBLIC_API_URL ?? "";
 const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+
+export function getCustomApiUrl(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem("tm_custom_api_url") || null;
+}
+
+export function setCustomApiUrl(url: string | null) {
+  if (typeof window === "undefined") return;
+  if (url) localStorage.setItem("tm_custom_api_url", url.replace(/\/$/, ""));
+  else localStorage.removeItem("tm_custom_api_url");
+}
+
+function getEffectiveBase(): string {
+  return getCustomApiUrl() ?? BASE;
+}
+
+export const isStatic = (): boolean => {
+  if (typeof window === "undefined") return false;
+  if (getCustomApiUrl()) return false;   // 라이브 서버 연결 시 정적 모드 해제
+  return window.location.hostname.includes("github.io") ||
+    process.env.NEXT_PUBLIC_STATIC === "true";
+};
 
 // ── 일반 API 요청 (로컬 서버) ────────────────────────────────────────────────
 function getToken(): string | null {
@@ -21,12 +37,13 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   };
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
-  const res = await fetch(`${BASE}${path}`, { ...options, headers });
+  const res = await fetch(`${getEffectiveBase()}${path}`, { ...options, headers });
 
   if (res.status === 401) {
     localStorage.removeItem("tm_token");
     localStorage.removeItem("tm_user");
     window.location.href = `${BASE_PATH}/login`;
+    setCustomApiUrl(null);
     throw new Error("Unauthorized");
   }
 

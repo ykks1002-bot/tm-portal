@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef, Suspense } from "react";
 import Link from "next/link";
-import { api, type Course, type ComparisonResponse, type Script, type ScrapeStatus } from "@/lib/api";
+import { api, getCustomApiUrl, setCustomApiUrl, type Course, type ComparisonResponse, type Script, type ScrapeStatus } from "@/lib/api";
 
 // ── 타입 ──────────────────────────────────────────────────────────────────────
 interface EProduct { name: string; price: string; features: string[] }
@@ -477,22 +477,31 @@ function ApiKeyModal({ onSave, onClose }: { onSave: (k: string) => void; onClose
 
 // ── 어드민 인라인 로그인 모달 ────────────────────────────────────────────────
 function AdminLoginModal({ onSuccess, onClose }: { onSuccess: () => void; onClose: () => void }) {
-  const [email, setEmail]   = useState("");
-  const [pw, setPw]         = useState("");
-  const [err, setErr]       = useState("");
-  const [loading, setLoading] = useState(false);
+  const [email, setEmail]       = useState("");
+  const [pw, setPw]             = useState("");
+  const [serverUrl, setServerUrl] = useState(getCustomApiUrl() ?? "");
+  const [showServer, setShowServer] = useState(!!getCustomApiUrl());
+  const [err, setErr]           = useState("");
+  const [loading, setLoading]   = useState(false);
 
   const doLogin = async () => {
     setErr(""); setLoading(true);
     try {
+      if (serverUrl.trim()) {
+        setCustomApiUrl(serverUrl.trim());
+      } else {
+        setCustomApiUrl(null);
+      }
       const res = await api.login(email, pw);
       if (res.user_role !== "admin" && res.user_role !== "superadmin") {
+        setCustomApiUrl(null);
         throw new Error("어드민 권한이 없습니다");
       }
       localStorage.setItem("tm_token", res.access_token);
       localStorage.setItem("tm_user", JSON.stringify({ name: res.user_name, role: res.user_role }));
       onSuccess();
     } catch (e) {
+      if (serverUrl.trim()) setCustomApiUrl(null);
       setErr((e as Error).message);
     } finally {
       setLoading(false);
@@ -507,6 +516,31 @@ function AdminLoginModal({ onSuccess, onClose }: { onSuccess: () => void; onClos
           <h2 className="font-bold text-sm" style={{ color: "var(--eduwill-navy)" }}>⚙️ 어드민 로그인</h2>
           <button onClick={onClose} style={{ color: "var(--text-muted)" }}>✕</button>
         </div>
+
+        {/* 서버 연결 설정 */}
+        <button
+          onClick={() => setShowServer(s => !s)}
+          className="w-full flex items-center justify-between text-xs px-3 py-2 rounded-lg mb-3"
+          style={{ background: "var(--surface2)", color: "var(--text-muted)", border: "1px solid var(--border)" }}>
+          <span>🔗 서버 연결 설정 <span style={{ color: serverUrl ? "#16A34A" : "var(--text-muted)" }}>{serverUrl ? "(연결됨)" : "(미설정 — 정적모드)"}</span></span>
+          <span>{showServer ? "▲" : "▼"}</span>
+        </button>
+        {showServer && (
+          <div className="mb-3">
+            <input
+              type="url"
+              placeholder="http://10.10.30.40:8000"
+              value={serverUrl}
+              onChange={e => setServerUrl(e.target.value)}
+              className="w-full px-3 py-2 rounded-xl text-xs outline-none mb-1"
+              style={{ background: "var(--surface2)", border: "1.5px solid var(--border)", color: "var(--text)" }}
+            />
+            <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+              입력 시 라이브 서버 계정으로 로그인, 빈칸은 정적 모드
+            </p>
+          </div>
+        )}
+
         <input type="email" placeholder="이메일" value={email} onChange={e => setEmail(e.target.value)}
                className="w-full px-4 py-2.5 rounded-xl text-sm mb-2 outline-none"
                style={{ background: "var(--surface2)", border: "1.5px solid var(--border)", color: "var(--text)" }} />
@@ -527,6 +561,7 @@ function AdminLoginModal({ onSuccess, onClose }: { onSuccess: () => void; onClos
 
 // ── 어드민 드롭다운 패널 ──────────────────────────────────────────────────────
 function AdminDropdown({ onClose, onLogout, courseId }: { onClose: () => void; onLogout: () => void; courseId: number | null }) {
+  const serverUrl = getCustomApiUrl();
   const items = [
     { icon: "🏠", label: "어드민 대시보드",      href: "/admin" },
     { icon: "💰", label: "가격 관리",            href: "/admin/prices" },
@@ -538,6 +573,9 @@ function AdminDropdown({ onClose, onLogout, courseId }: { onClose: () => void; o
       <div className="fixed inset-0 z-40" onClick={onClose} />
       <div className="absolute right-0 top-full mt-2 w-52 rounded-xl overflow-hidden z-50"
            style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "0 8px 30px rgba(0,0,0,0.2)" }}>
+        <div className="px-4 py-2 text-xs" style={{ background: "var(--surface2)", borderBottom: "1px solid var(--border)", color: serverUrl ? "#16A34A" : "var(--text-muted)" }}>
+          {serverUrl ? `🟢 ${serverUrl}` : "🔵 정적 모드"}
+        </div>
         {items.map(it => (
           <Link key={it.href} href={it.href} onClick={onClose}
                 className="flex items-center gap-2.5 px-4 py-3 text-sm transition hover:opacity-80"
@@ -736,6 +774,7 @@ function HomeInner() {
   const handleAdminLogout = useCallback(() => {
     localStorage.removeItem("tm_token");
     localStorage.removeItem("tm_user");
+    setCustomApiUrl(null);
     setIsAdmin(false);
     setShowAdminPanel(false);
   }, []);
