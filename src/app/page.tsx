@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef, Suspense } from "react";
+import { useEffect, useState, useCallback, Suspense } from "react";
 import Link from "next/link";
-import { api, getCustomApiUrl, setCustomApiUrl, type Course, type ComparisonResponse, type Script, type ScrapeStatus } from "@/lib/api";
+import { api, getCustomApiUrl, setCustomApiUrl, type Course, type ComparisonResponse, type ExamSchedule, type EmploymentStat, type ScrapeStatus } from "@/lib/api";
 
 // ── 타입 ──────────────────────────────────────────────────────────────────────
 interface EProduct { name: string; price: string; features: string[] }
@@ -223,254 +223,218 @@ function getDataAge(isoDate: string | null | undefined): DataAge {
   return { hours, label: `${days}일 전 확인됨 — 가격이 변경됐을 수 있습니다`, color: "#DC2626", bg: "#FEF2F2", warn: true };
 }
 
-// ── AI 스크립트 생성 ──────────────────────────────────────────────────────────
-
-const ALL_COMPETITORS = [
-  "해커스", "박문각", "메가랜드", "공단기", "시대에듀", "에듀피디",
-  "넥스트공무원", "지안에듀", "유상통", "계리단기", "국자감", "검스타트",
-  "다산에듀", "대산전기", "모아바", "성안당", "배울학", "에듀야", "합격의법학원",
-];
-
-function filterAdvantages(advantages: string[], targetCompetitor: string): string[] {
-  const others = ALL_COMPETITORS.filter(c => c !== targetCompetitor);
-  return advantages.filter(a => !others.some(c => a.includes(c)));
+// ── 시험 정보 / 취업 전망 공통 ────────────────────────────────────────────────
+function EmptyState({ message }: { message: string }) {
+  return (
+    <div className="py-10 text-center">
+      <p className="text-sm" style={{ color: "var(--text-muted)" }}>{message}</p>
+    </div>
+  );
 }
 
-function buildPrompt(course: string, sit: string, ew: EProduct[], ci: CompInfo): string {
-  const sitLabel: Record<string, string> = {
-    타사비교: "고객이 타사와 비교 중",
-    가격이의: "고객이 가격 이의 제기",
-    첫상담:   "첫 번째 상담",
-    재상담:   "재상담 고객",
-  };
+const OUTLOOK_CONFIG: Record<string, { label: string; color: string; bg: string; bar: number }> = {
+  증가:     { label: "증가",      color: "#166534", bg: "#DCFCE7", bar: 90 },
+  다소증가: { label: "다소 증가", color: "#1D4ED8", bg: "#EFF6FF", bar: 70 },
+  유지:     { label: "유지",      color: "#92400E", bg: "#FFFBEB", bar: 50 },
+  다소감소: { label: "다소 감소", color: "#C2410C", bg: "#FFF7ED", bar: 30 },
+  감소:     { label: "감소",      color: "#DC2626", bg: "#FEF2F2", bar: 15 },
+};
 
-  const cleanAdvantages = filterAdvantages(ci.advantages, ci.name).slice(0, 4);
-
-  return `당신은 에듀윌 TM 상담사 전문 코치입니다.
-고객이 비교하는 경쟁사는 오직 【${ci.name}】입니다.
-스크립트에서 반드시 【${ci.name}】만 언급하고, 다른 경쟁사(해커스·박문각·공단기 등)는 절대 언급하지 마세요.
-
-[상담 정보]
-과목: ${course}
-상황: ${sitLabel[sit] || sit}
-비교 대상: ${ci.name}
-
-[에듀윌 상품]
-${ew.map(p => `• ${p.name} (${p.price})`).join("\n")}
-
-[${ci.name} 상품]
-${ci.products.length > 0
-  ? ci.products.map(p => `• ${p.name}: ${p.price}`).join("\n")
-  : "• 상품 정보 없음"}
-
-[에듀윌의 ${ci.name} 대비 강점]
-${cleanAdvantages.length > 0
-  ? cleanAdvantages.map(a => `• ${a}`).join("\n")
-  : "• 합격률, 강사진, 학습관리 시스템 우위"}
-
-[작성 조건]
-- 비교 대상은 반드시 ${ci.name}만 언급 (다른 경쟁사명 사용 금지)
-- ${ci.name}을 직접 비방하지 않고 에듀윌 강점 자연스럽게 부각
-- 친근하고 전문적인 한국어 1인칭 대화체
-- 3~4문장, 200자 내외로 간결하게
-- 바로 사용 가능한 완성형 스크립트만 작성`;
-}
-
-const GEMINI_FALLBACK_MODELS = [
-  "gemini-2.0-flash",
-  "gemini-2.0-flash-lite",
-  "gemini-1.5-flash-8b",
-  "gemini-1.5-flash",
-];
-
-async function genWithGemini(key: string, prompt: string): Promise<string> {
-  let lastErr = "";
-  for (const model of GEMINI_FALLBACK_MODELS) {
-    try {
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,
-        {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
-        }
-      );
-      const data = await res.json() as {
-        candidates?: { content: { parts: { text: string }[] } }[];
-        error?: { message?: string; code?: number };
-      };
-      if (!res.ok || data.error) {
-        const msg = data.error?.message || `Gemini 오류 ${res.status}`;
-        // 할당량 초과 또는 모델 미지원 → 다음 모델 시도
-        if (res.status === 429 || res.status === 403 ||
-            msg.toLowerCase().includes("quota") ||
-            msg.toLowerCase().includes("exhausted") ||
-            msg.toLowerCase().includes("not found") ||
-            msg.toLowerCase().includes("limit")) {
-          lastErr = `${model}: ${msg.slice(0, 80)}`;
-          continue;
-        }
-        throw new Error(msg);
-      }
-      return data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-    } catch (e) {
-      const msg = (e as Error).message;
-      if (msg.includes("quota") || msg.includes("exhausted") || msg.includes("limit") || msg.includes("not found")) {
-        lastErr = `${model}: ${msg.slice(0, 80)}`;
-        continue;
-      }
-      throw e;
-    }
-  }
-  throw new Error(`모든 Gemini 모델 할당량 초과. 마지막 오류: ${lastErr}`);
-}
-
-async function genWithGroq(key: string, prompt: string): Promise<string> {
-  const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${key}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "llama-3.3-70b-versatile",
-      messages: [{ role: "user", content: prompt }],
-      max_tokens: 600,
-    }),
-  });
-  if (!res.ok) {
-    const e = await res.json().catch(() => ({})) as { error?: { message?: string } };
-    throw new Error(e.error?.message || `Groq 오류 ${res.status}`);
-  }
-  const d = await res.json() as { choices: { message: { content: string } }[] };
-  return d.choices?.[0]?.message?.content || "";
-}
-
-async function genWithClaude(key: string, prompt: string): Promise<string> {
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "x-api-key": key,
-      "anthropic-version": "2023-06-01",
-      "anthropic-dangerous-direct-browser-access": "true",
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 600,
-      messages: [{ role: "user", content: prompt }],
-    }),
-  });
-  if (!res.ok) {
-    const e = await res.json().catch(() => ({})) as { error?: { message?: string } };
-    throw new Error(e.error?.message || `Claude 오류 ${res.status}`);
-  }
-  const d = await res.json() as { content: { type: string; text: string }[] };
-  return d.content.find(x => x.type === "text")?.text || "";
-}
-
-async function genScript(key: string, course: string, sit: string, ew: EProduct[], ci: CompInfo): Promise<string> {
-  const prompt = buildPrompt(course, sit, ew, ci);
-  if (key.startsWith("sk-ant-")) return genWithClaude(key, prompt);
-  if (key.startsWith("gsk_"))    return genWithGroq(key, prompt);
-  return genWithGemini(key, prompt);
-}
-
-function detectKeyType(key: string): "groq" | "claude" | "gemini" | "" {
-  if (!key) return "";
-  if (key.startsWith("sk-ant-")) return "claude";
-  if (key.startsWith("gsk_"))    return "groq";
-  if (key.length >= 10)          return "gemini";
-  return "";
-}
-
-function isAuthError(msg: string) {
-  return msg.includes("invalid") || msg.includes("401") || msg.includes("authentication") ||
-         msg.includes("Unauthorized") || msg.includes("API_KEY_INVALID") || msg.includes("403");
-}
-
-// ── API 키 모달 ───────────────────────────────────────────────────────────────
-function ApiKeyModal({ onSave, onClose }: { onSave: (k: string) => void; onClose: () => void }) {
-  const [v, setV] = useState("");
-  const keyType = detectKeyType(v);
-  const valid = keyType !== "";
-
-  const labelMap: Record<string, string> = {
-    groq: "Groq 저장",
-    claude: "Claude 저장",
-    gemini: "Gemini 저장",
-  };
+// ── 시험 정보 섹션 ─────────────────────────────────────────────────────────────
+function ExamSection({ schedules }: { schedules: ExamSchedule[] }) {
+  if (!schedules.length) return <EmptyState message="등록된 시험 일정이 없습니다." />;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.6)" }}>
-      <div className="rounded-2xl p-6 max-w-md w-full mx-4" style={{ background: "var(--surface)", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
-        <h2 className="font-bold text-base mb-4" style={{ color: "var(--eduwill-navy)" }}>🔑 AI 스크립트 API 키</h2>
+    <div className="space-y-5">
+      {schedules.map(s => {
+        const subjects: { round: string; name: string; count: string; time: string }[] =
+          s.subjects_json ? JSON.parse(s.subjects_json) : [];
+        const rounds = Array.from(new Set(subjects.map(x => x.round)));
 
-        {/* Groq - 최우선 추천 */}
-        <div className="rounded-xl p-3.5 mb-3" style={{ background: "#F0FDF4", border: "2px solid #86EFAC" }}>
-          <div className="flex items-center gap-2 mb-1.5">
-            <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: "#16A34A", color: "white" }}>무료 · 추천</span>
-            <span className="text-xs font-bold" style={{ color: "#15803D" }}>Groq (Llama 3.3)</span>
-            <span className="text-xs ml-auto" style={{ color: "#16A34A" }}>한국 정상작동 ✓</span>
+        return (
+          <div key={s.id} className="rounded-2xl overflow-hidden"
+               style={{ border: "1px solid var(--border)", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+            <div className="px-5 py-3.5 flex items-center justify-between"
+                 style={{ background: "var(--eduwill-navy)" }}>
+              <div className="flex items-center gap-3">
+                <span className="text-white font-bold text-base">
+                  {s.year}년 {s.round_label}
+                </span>
+                {s.organizer && (
+                  <span className="text-xs px-2.5 py-0.5 rounded-full font-medium"
+                        style={{ background: "rgba(255,255,255,0.15)", color: "rgba(255,255,255,0.85)" }}>
+                    {s.organizer}
+                  </span>
+                )}
+              </div>
+              {s.source_url && (
+                <a href={s.source_url} target="_blank" rel="noopener noreferrer"
+                   className="text-xs px-2.5 py-0.5 rounded-full"
+                   style={{ background: "rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.7)", textDecoration: "none" }}>
+                  출처 바로가기 ↗
+                </a>
+              )}
+            </div>
+
+            <div className="p-5 grid gap-5" style={{ gridTemplateColumns: "1fr 1fr" }}>
+              {/* 좌: 시험 일정 */}
+              <div>
+                <h3 className="text-xs font-bold uppercase mb-3 tracking-wider"
+                    style={{ color: "var(--text-muted)" }}>📅 시험 일정</h3>
+                <div className="space-y-2.5">
+                  {[
+                    { label: "필기(1차) 원서접수",  start: s.written_reg_start,    end: s.written_reg_end },
+                    { label: "필기(1차) 시험일",    date: s.written_exam_date },
+                    { label: "필기(1차) 합격발표",  date: s.written_result_date },
+                    ...(s.practical_exam_date ? [
+                      { label: "실기(2차) 원서접수", start: s.practical_reg_start, end: s.practical_reg_end },
+                      { label: "실기(2차) 시험일",   date: s.practical_exam_date },
+                      { label: "실기(2차) 합격발표", date: s.practical_result_date },
+                    ] : []),
+                  ].filter(row => row.date || row.start).map((row, i) => (
+                    <div key={i} className="flex gap-2 text-sm">
+                      <span className="shrink-0 w-36 text-xs pt-0.5" style={{ color: "var(--text-muted)" }}>
+                        {row.label}
+                      </span>
+                      <span className="font-medium" style={{ color: "var(--text)" }}>
+                        {row.date ?? `${row.start} ~ ${row.end}`}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                {s.exam_fee && (
+                  <div className="mt-4 flex items-center gap-2">
+                    <span className="text-xs" style={{ color: "var(--text-muted)" }}>💰 응시료</span>
+                    <span className="text-sm font-semibold" style={{ color: "var(--eduwill-navy)" }}>{s.exam_fee}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* 우: 시험과목 */}
+              <div>
+                <h3 className="text-xs font-bold uppercase mb-3 tracking-wider"
+                    style={{ color: "var(--text-muted)" }}>📋 시험과목 및 시험시간</h3>
+                <div className="space-y-3">
+                  {rounds.map(round => (
+                    <div key={round}>
+                      <div className="text-xs font-bold mb-1.5 px-2 py-0.5 rounded inline-block"
+                           style={{ background: "rgba(0,45,105,0.08)", color: "var(--eduwill-navy)" }}>
+                        {round}
+                      </div>
+                      <div className="space-y-1">
+                        {subjects.filter(x => x.round === round).map((subj, si) => (
+                          <div key={si} className="flex items-start justify-between text-xs gap-2 px-2 py-1.5 rounded-lg"
+                               style={{ background: "var(--surface2)" }}>
+                            <span style={{ color: "var(--text)" }}>{subj.name}</span>
+                            <div className="shrink-0 flex gap-1.5">
+                              {subj.count && (
+                                <span className="px-1.5 py-0.5 rounded"
+                                      style={{ background: "rgba(79,127,255,0.1)", color: "var(--accent)" }}>
+                                  {subj.count}
+                                </span>
+                              )}
+                              {subj.time && (
+                                <span className="px-1.5 py-0.5 rounded"
+                                      style={{ background: "rgba(0,0,0,0.05)", color: "var(--text-muted)" }}>
+                                  {subj.time}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {s.notes && (
+              <div className="px-5 pb-5">
+                <div className="rounded-xl p-4"
+                     style={{ background: "#FFFDF0", borderLeft: "3px solid var(--eduwill-yellow)" }}>
+                  <div className="text-xs font-bold mb-2" style={{ color: "var(--eduwill-navy)" }}>⚠️ 유의사항</div>
+                  <p className="text-xs leading-relaxed whitespace-pre-line" style={{ color: "#374151" }}>{s.notes}</p>
+                </div>
+              </div>
+            )}
           </div>
-          <p className="text-xs" style={{ color: "#166534" }}>
-            <strong>console.groq.com</strong> → API Keys → Create API Key → 무료 발급
-          </p>
-          <p className="text-xs mt-0.5" style={{ color: "#166534", opacity: 0.8 }}>
-            키 형식: <strong>gsk_...</strong> · 하루 14,400회 무료 · 카드 불필요
-          </p>
-        </div>
+        );
+      })}
+    </div>
+  );
+}
 
-        {/* Gemini */}
-        <div className="rounded-xl p-3 mb-3" style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: "#F59E0B", color: "white" }}>무료 (지역제한)</span>
-            <span className="text-xs font-bold" style={{ color: "var(--text-muted)" }}>Google Gemini</span>
+// ── 취업 전망 섹션 ─────────────────────────────────────────────────────────────
+function EmploymentSection({ stat }: { stat: EmploymentStat | null }) {
+  if (!stat) return <EmptyState message="등록된 취업 전망 데이터가 없습니다." />;
+
+  const talkingPoints: string[] = stat.talking_points_json
+    ? JSON.parse(stat.talking_points_json) : [];
+  const outlook = stat.employment_outlook
+    ? (OUTLOOK_CONFIG[stat.employment_outlook] ?? OUTLOOK_CONFIG["유지"]) : null;
+
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
+        {[
+          { icon: "👥", label: "종사자 수",  value: stat.worker_count },
+          { icon: "💵", label: "평균 임금",  value: stat.avg_wage },
+          { icon: "📈", label: "고용 전망",  value: outlook?.label, badge: true, color: outlook?.color, bg: outlook?.bg },
+        ].filter(c => c.value).map((card, i) => (
+          <div key={i} className="rounded-2xl p-4 flex flex-col gap-1.5"
+               style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
+            <span className="text-xl">{card.icon}</span>
+            <span className="text-xs" style={{ color: "var(--text-muted)" }}>{card.label}</span>
+            {card.badge ? (
+              <span className="inline-block text-sm font-bold px-3 py-1 rounded-full w-fit"
+                    style={{ background: card.bg, color: card.color }}>{card.value}</span>
+            ) : (
+              <span className="text-base font-bold" style={{ color: "var(--eduwill-navy)" }}>{card.value}</span>
+            )}
           </div>
-          <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-            aistudio.google.com → Get API key · 키 형식: AIza... 또는 AQ...
-          </p>
-          <p className="text-xs mt-0.5" style={{ color: "#D97706" }}>
-            ⚠️ 한국 계정에서 할당량 0 오류 발생 시 Groq 사용 권장
-          </p>
-        </div>
-
-        {/* Claude */}
-        <div className="rounded-xl p-3 mb-4" style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: "#6B7280", color: "white" }}>유료</span>
-            <span className="text-xs font-bold" style={{ color: "var(--text-muted)" }}>Claude (Anthropic)</span>
-          </div>
-          <p className="text-xs" style={{ color: "var(--text-muted)" }}>console.anthropic.com → API Keys · 키 형식: sk-ant-...</p>
-        </div>
-
-        <input type="password"
-               placeholder="gsk_... (Groq) / AIza... (Gemini) / sk-ant-... (Claude)"
-               value={v} onChange={e => setV(e.target.value)}
-               onKeyDown={e => e.key === "Enter" && valid && onSave(v)}
-               className="w-full px-4 py-2.5 rounded-xl text-sm mb-3 outline-none"
-               style={{
-                 border: `1.5px solid ${valid ? "#16A34A" : "var(--border)"}`,
-                 background: "var(--surface2)", color: "var(--text)",
-               }} />
-
-        {v && !valid && (
-          <p className="text-xs mb-2" style={{ color: "#DC2626" }}>키를 10자 이상 입력해주세요</p>
-        )}
-        {keyType === "groq" && (
-          <p className="text-xs mb-2 font-medium" style={{ color: "#16A34A" }}>✓ Groq API 키 감지됨</p>
-        )}
-
-        <div className="flex gap-2">
-          <button onClick={() => valid && onSave(v)} disabled={!valid}
-                  className="flex-1 py-2 rounded-xl text-sm font-bold disabled:opacity-40"
-                  style={{ background: "var(--eduwill-yellow)", color: "var(--eduwill-navy)" }}>
-            {keyType ? labelMap[keyType] : "저장"}
-          </button>
-          <button onClick={onClose} className="px-4 py-2 rounded-xl text-sm font-bold"
-                  style={{ background: "var(--surface2)", color: "var(--text-muted)" }}>닫기</button>
-        </div>
+        ))}
       </div>
+
+      {(stat.outlook_detail || outlook) && (
+        <div className="rounded-2xl p-4" style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
+          {outlook && (
+            <div className="flex items-center gap-3 mb-3">
+              <span className="text-xs font-bold shrink-0" style={{ color: "var(--text-muted)" }}>고용 전망 지수</span>
+              <div className="flex-1 rounded-full h-2 overflow-hidden" style={{ background: "var(--border)" }}>
+                <div className="h-full rounded-full" style={{ width: `${outlook.bar}%`, background: outlook.color }} />
+              </div>
+              <span className="text-xs font-semibold shrink-0" style={{ color: outlook.color }}>{outlook.label}</span>
+            </div>
+          )}
+          {stat.outlook_detail && (
+            <p className="text-sm leading-relaxed" style={{ color: "var(--text)" }}>{stat.outlook_detail}</p>
+          )}
+          {stat.stat_year && (
+            <p className="text-xs mt-2" style={{ color: "var(--text-muted)" }}>
+              기준: {stat.stat_year}년 | 출처: {stat.data_source}
+            </p>
+          )}
+        </div>
+      )}
+
+      {talkingPoints.length > 0 && (
+        <div className="rounded-2xl p-4" style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-sm">📌</span>
+            <h3 className="font-bold text-sm" style={{ color: "var(--eduwill-navy)" }}>상담 활용 포인트</h3>
+          </div>
+          <div className="space-y-2">
+            {talkingPoints.map((pt, i) => (
+              <div key={i} className="flex items-start gap-2.5 text-xs leading-relaxed"
+                   style={{ color: "var(--text)" }}>
+                <span className="shrink-0 font-bold mt-0.5" style={{ color: "var(--eduwill-navy)" }}>•</span>
+                <span>{pt}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -652,29 +616,15 @@ function PriceSummaryBanner({ summary, competitorName }: { summary: PriceSummary
   );
 }
 
-const SITS = [
-  { k: "타사비교", l: "⚔️ 타사 비교 중" },
-  { k: "가격이의", l: "💸 가격 이의" },
-  { k: "첫상담",   l: "👋 첫 상담" },
-  { k: "재상담",   l: "🔄 재상담" },
-];
-
 function HomeInner() {
   const [courses, setCourses]           = useState<Course[]>([]);
   const [courseId, setCourseId]         = useState<number | null>(null);
   const [comp, setComp]                 = useState<ComparisonResponse | null>(null);
   const [competitorId, setCompetitorId] = useState<number | null>(null);
-  const [scripts, setScripts]           = useState<Script[]>([]);
+  const [examSchedules, setExamSchedules] = useState<ExamSchedule[]>([]);
+  const [employmentStat, setEmploymentStat] = useState<EmploymentStat | null>(null);
   const [loading, setLoading]           = useState(true);
   const [compLoading, setCompLoading]   = useState(false);
-
-  const [sit, setSit]                   = useState("타사비교");
-  const [aiScript, setAiScript]         = useState("");
-  const [scriptLoading, setScriptLoading] = useState(false);
-  const [scriptErr, setScriptErr]       = useState("");
-  const [copied, setCopied]             = useState<string | null>(null);
-  const [apiKey, setApiKey]             = useState("");
-  const [showModal, setShowModal]       = useState(false);
 
   const [category, setCategory]         = useState<string>("all");
   const [search, setSearch]             = useState("");
@@ -686,10 +636,7 @@ function HomeInner() {
   const [showAdminLogin, setShowAdminLogin]   = useState(false);
   const [showAdminPanel, setShowAdminPanel]   = useState(false);
 
-  const scriptEl = useRef<HTMLDivElement>(null);
-
   useEffect(() => {
-    setApiKey(localStorage.getItem("claude_api_key") || "");
     const u = localStorage.getItem("tm_user");
     if (u) {
       try {
@@ -724,43 +671,17 @@ function HomeInner() {
   useEffect(() => {
     if (!courseId) return;
     setCompLoading(true);
-    setComp(null); setCompetitorId(null); setAiScript(""); setScripts([]);
-    Promise.all([api.comparison(courseId), api.scripts(courseId)])
-      .then(([d, sc]) => {
-        setComp(d); setScripts(sc);
+    setComp(null); setCompetitorId(null); setExamSchedules([]); setEmploymentStat(null);
+    Promise.all([
+      api.comparison(courseId),
+      api.examSchedules(courseId),
+      api.employmentStat(courseId).catch(() => null),
+    ])
+      .then(([d, exams, emp]) => {
+        setComp(d); setExamSchedules(exams); setEmploymentStat(emp);
         if (d.competitors.length) setCompetitorId(d.competitors[0].id);
       }).finally(() => setCompLoading(false));
   }, [courseId]);
-
-  const handleCopy = useCallback(async (text: string, id: string) => {
-    await navigator.clipboard.writeText(text);
-    setCopied(id); setTimeout(() => setCopied(null), 2000);
-  }, []);
-
-  const handleGenAI = useCallback(async () => {
-    if (!apiKey) { setShowModal(true); return; }
-    if (!comp || competitorId === null) return;
-    const ci = parseCompetitor(comp, competitorId);
-    if (!ci) return;
-    setScriptLoading(true); setScriptErr(""); setAiScript("");
-    try {
-      const course = courses.find(c => c.id === courseId);
-      const result = await genScript(apiKey, course?.name || "", sit, parseEduwill(comp), ci);
-      setAiScript(result);
-      setTimeout(() => scriptEl.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
-    } catch (e) {
-      const msg = (e as Error).message;
-      setScriptErr(msg);
-      if (isAuthError(msg)) {
-        localStorage.removeItem("claude_api_key"); setApiKey("");
-        setTimeout(() => setShowModal(true), 300);
-      }
-    } finally { setScriptLoading(false); }
-  }, [apiKey, comp, competitorId, sit, courses, courseId]);
-
-  const saveKey = useCallback((k: string) => {
-    localStorage.setItem("claude_api_key", k); setApiKey(k); setShowModal(false);
-  }, []);
 
   const handleTriggerScrape = useCallback(async () => {
     try {
@@ -795,14 +716,11 @@ function HomeInner() {
   const course  = courses.find(c => c.id === courseId);
   const ewProds = comp ? parseEduwill(comp) : [];
   const ci      = (comp && competitorId !== null) ? parseCompetitor(comp, competitorId) : null;
-  const preScripts = scripts.filter(s => s.situation_tag === sit);
-  const apiLabel   = apiKey.startsWith("sk-ant-") ? "Claude" : apiKey.startsWith("gsk_") ? "Groq" : "Gemini";
   const dataAge    = getDataAge(comp?.last_updated);
   const priceSummary = calcPriceSummary(ewProds, ci);
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
-      {showModal && <ApiKeyModal onSave={saveKey} onClose={() => setShowModal(false)} />}
       {showAdminLogin && (
         <AdminLoginModal
           onSuccess={() => { setIsAdmin(true); setShowAdminLogin(false); setShowAdminPanel(true); }}
@@ -864,15 +782,6 @@ function HomeInner() {
               )}
             </div>
 
-            <button onClick={() => setShowModal(true)}
-                    className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-medium transition"
-                    style={{
-                      background: apiKey ? "rgba(255,255,255,0.1)" : "rgba(255,210,0,0.25)",
-                      color:      apiKey ? "rgba(255,255,255,0.65)" : "var(--eduwill-yellow)",
-                      border:     `1px solid ${apiKey ? "rgba(255,255,255,0.2)" : "var(--eduwill-yellow)"}`,
-                    }}>
-              🔑 {apiKey ? `AI (${apiLabel})` : "AI 키 설정"}
-            </button>
           </div>
         </div>
       </header>
@@ -949,7 +858,7 @@ function HomeInner() {
               <div className="flex gap-2 flex-wrap items-center">
                 <span className="text-xs font-bold" style={{ color: "var(--text-muted)" }}>경쟁사 선택</span>
                 {comp.competitors.map(c => (
-                  <button key={c.id} onClick={() => { setCompetitorId(c.id); setAiScript(""); setScriptErr(""); }}
+                  <button key={c.id} onClick={() => setCompetitorId(c.id)}
                           className="px-4 py-2 rounded-xl text-sm font-bold transition"
                           style={{
                             background: competitorId === c.id ? "#1C2B5E" : "var(--surface)",
@@ -1090,135 +999,29 @@ function HomeInner() {
               </section>
             </div>
 
-            {/* ── 스크립트 섹션 ── */}
-            <section ref={scriptEl} className="rounded-2xl overflow-hidden"
+            {/* ── 시험 정보 섹션 ── */}
+            <section className="rounded-2xl overflow-hidden mb-4"
                      style={{ border: "1.5px solid var(--border)", background: "var(--surface)" }}>
-              <div className="px-5 py-3 flex items-center justify-between" style={{ background: "var(--eduwill-navy)" }}>
-                <div className="flex items-center gap-2">
-                  <span className="text-base">💬</span>
-                  <span className="text-sm font-bold text-white">상담 스크립트</span>
-                  {ci && <span className="text-xs text-white opacity-60">— {ci.name} 고객 응대용</span>}
-                </div>
+              <div className="px-5 py-3 flex items-center gap-2" style={{ background: "var(--eduwill-navy)" }}>
+                <span className="text-base">📅</span>
+                <span className="text-sm font-bold text-white">시험 정보</span>
+                {course && <span className="text-xs text-white opacity-60">— {course.name}</span>}
               </div>
-
               <div className="p-5">
-                {/* 상황 선택 */}
-                <div className="flex flex-wrap gap-2 mb-5">
-                  {SITS.map(s => (
-                    <button key={s.k} onClick={() => { setSit(s.k); setAiScript(""); setScriptErr(""); }}
-                            className="px-4 py-1.5 rounded-full text-xs font-bold transition"
-                            style={{
-                              background: sit === s.k ? "var(--eduwill-navy)" : "var(--surface2)",
-                              color:      sit === s.k ? "white" : "var(--text-muted)",
-                              border:     sit === s.k ? "none" : "1px solid var(--border)",
-                            }}>
-                      {s.l}
-                    </button>
-                  ))}
-                </div>
+                <ExamSection schedules={examSchedules} />
+              </div>
+            </section>
 
-                {/* 사전 작성 스크립트 */}
-                {preScripts.length > 0 && (
-                  <div className="mb-5">
-                    <p className="text-xs font-bold mb-2 flex items-center gap-1.5" style={{ color: "var(--text-muted)" }}>
-                      <span className="px-2 py-0.5 rounded-full text-white text-xs" style={{ background: "#16A34A" }}>기본</span>
-                      사전 준비 스크립트
-                    </p>
-                    <div className="space-y-3">
-                      {preScripts.map(s => (
-                        <div key={s.id} className="rounded-xl overflow-hidden"
-                             style={{ border: "1px solid var(--border)" }}>
-                          <div className="px-4 py-2.5 flex items-center justify-between"
-                               style={{ background: "var(--surface2)", borderBottom: "1px solid var(--border)" }}>
-                            <span className="text-xs font-bold" style={{ color: "var(--eduwill-navy)" }}>{s.title}</span>
-                            <button onClick={() => handleCopy(s.body_template, String(s.id))}
-                                    className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-bold transition"
-                                    style={{
-                                      background: copied === String(s.id) ? "#DCFCE7" : "white",
-                                      color:      copied === String(s.id) ? "#166534" : "var(--eduwill-blue)",
-                                      border:     `1px solid ${copied === String(s.id) ? "#BBF7D0" : "var(--eduwill-blue)"}`,
-                                    }}>
-                              {copied === String(s.id) ? "✓ 복사됨" : "📋 복사"}
-                            </button>
-                          </div>
-                          <pre className="px-4 py-3 text-sm whitespace-pre-wrap leading-relaxed font-sans"
-                               style={{ color: "var(--text)", background: "var(--surface)" }}>
-                            {s.body_template}
-                          </pre>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* AI 생성 스크립트 */}
-                <div>
-                  <p className="text-xs font-bold mb-2 flex items-center gap-1.5" style={{ color: "var(--text-muted)" }}>
-                    <span className="px-2 py-0.5 rounded-full text-white text-xs"
-                          style={{ background: apiKey ? "#2563EB" : "#9CA3AF" }}>
-                      {apiKey ? `AI · ${apiLabel}` : "AI · 선택"}
-                    </span>
-                    경쟁사 정보 기반 맞춤 스크립트
-                    {!apiKey && (
-                      <button onClick={() => setShowModal(true)}
-                              className="ml-1 text-xs underline" style={{ color: "var(--eduwill-blue)" }}>
-                        (무료 키 발급)
-                      </button>
-                    )}
-                  </p>
-
-                  <button onClick={handleGenAI} disabled={scriptLoading || !ci}
-                          className="w-full py-2.5 rounded-xl text-sm font-bold transition mb-3 disabled:opacity-50"
-                          style={{
-                            background: apiKey ? "#2563EB" : "var(--surface2)",
-                            color:      apiKey ? "white" : "var(--text-muted)",
-                            border:     apiKey ? "none" : "1.5px solid var(--border)",
-                          }}>
-                    {scriptLoading ? (
-                      <span className="flex items-center justify-center gap-2">
-                        <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                        AI 스크립트 생성 중…
-                      </span>
-                    ) : apiKey
-                      ? `✨ ${ci?.name || ""} 맞춤 스크립트 생성 (${apiLabel})`
-                      : "✨ AI 맞춤 스크립트 — API 키 설정 후 사용 가능"}
-                  </button>
-
-                  {scriptErr && (
-                    <div className="rounded-xl px-4 py-3 mb-3 text-xs"
-                         style={{ background: "#FEF2F2", color: "#B91C1C", border: "1px solid #FECACA" }}>
-                      ⚠️ {scriptErr}
-                      {isAuthError(scriptErr) && (
-                        <button onClick={() => { localStorage.removeItem("claude_api_key"); setApiKey(""); setShowModal(true); }}
-                                className="ml-2 underline font-bold">API 키 재설정</button>
-                      )}
-                    </div>
-                  )}
-
-                  {aiScript && (
-                    <div className="rounded-xl overflow-hidden" style={{ border: "1.5px solid #BFDBFE" }}>
-                      <div className="px-4 py-2.5 flex items-center justify-between"
-                           style={{ background: "#DBEAFE", borderBottom: "1px solid #BFDBFE" }}>
-                        <span className="text-xs font-bold" style={{ color: "#1D4ED8" }}>
-                          ✨ AI 생성 — {ci?.name} · {SITS.find(s => s.k === sit)?.l}
-                        </span>
-                        <button onClick={() => handleCopy(aiScript, "ai")}
-                                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-bold transition"
-                                style={{
-                                  background: copied === "ai" ? "#DCFCE7" : "white",
-                                  color:      copied === "ai" ? "#166534" : "#1D4ED8",
-                                  border:     `1px solid ${copied === "ai" ? "#BBF7D0" : "#BFDBFE"}`,
-                                }}>
-                          {copied === "ai" ? "✓ 복사됨" : "📋 복사"}
-                        </button>
-                      </div>
-                      <pre className="px-5 py-4 text-sm whitespace-pre-wrap leading-relaxed font-sans"
-                           style={{ color: "#1E3A5F", background: "#EFF6FF" }}>
-                        {aiScript}
-                      </pre>
-                    </div>
-                  )}
-                </div>
+            {/* ── 취업 전망 섹션 ── */}
+            <section className="rounded-2xl overflow-hidden"
+                     style={{ border: "1.5px solid var(--border)", background: "var(--surface)" }}>
+              <div className="px-5 py-3 flex items-center gap-2" style={{ background: "var(--eduwill-navy)" }}>
+                <span className="text-base">📈</span>
+                <span className="text-sm font-bold text-white">취업 전망</span>
+                {course && <span className="text-xs text-white opacity-60">— {course.name}</span>}
+              </div>
+              <div className="p-5">
+                <EmploymentSection stat={employmentStat} />
               </div>
             </section>
           </>
