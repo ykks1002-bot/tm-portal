@@ -142,11 +142,10 @@ export default function AdminPricesPage() {
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState("");
 
+  const isStaticMode = process.env.NEXT_PUBLIC_STATIC === "true" ||
+    (typeof window !== "undefined" && window.location.hostname.includes("github.io"));
+
   useEffect(() => {
-    if (window.location.hostname.includes("github.io") || process.env.NEXT_PUBLIC_STATIC === "true") {
-      router.replace("/");
-      return;
-    }
     const token = localStorage.getItem("tm_token");
     if (!token) { router.replace("/login"); return; }
     const u = localStorage.getItem("tm_user");
@@ -154,8 +153,9 @@ export default function AdminPricesPage() {
       const role = JSON.parse(u).role;
       if (role !== "admin" && role !== "superadmin") { router.replace("/"); return; }
     }
-    loadAll();
-  }, [router]);
+    if (!isStaticMode) loadAll();
+    else setLoading(false);
+  }, [router]);  // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadAll = useCallback(() => {
     setLoading(true);
@@ -194,6 +194,36 @@ export default function AdminPricesPage() {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: "var(--bg)" }}>
         <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (isStaticMode) {
+    return (
+      <div className="min-h-screen" style={{ background: "var(--bg)" }}>
+        <header className="flex items-center gap-4 px-6 py-4"
+                style={{ background: "var(--surface)", borderBottom: "1px solid var(--border)" }}>
+          <Link href="/admin" className="text-sm flex items-center gap-1.5" style={{ color: "var(--text-muted)" }}>
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>관리자
+          </Link>
+          <span style={{ color: "var(--border)" }}>│</span>
+          <h1 className="font-bold">가격 관리</h1>
+        </header>
+        <main className="max-w-2xl mx-auto px-6 py-12 text-center">
+          <div className="text-5xl mb-4">🔒</div>
+          <h2 className="text-lg font-bold mb-2" style={{ color: "var(--text)" }}>라이브 서버 전용 기능</h2>
+          <p className="text-sm mb-6" style={{ color: "var(--text-muted)" }}>
+            경쟁사 가격 관리는 백엔드 데이터베이스와 연결된 라이브 서버에서만 사용 가능합니다.
+            <br />GitHub Pages 정적 버전에서는 지원하지 않습니다.
+          </p>
+          <Link href="/admin"
+                className="inline-block text-sm px-5 py-2.5 rounded-xl font-bold"
+                style={{ background: "var(--accent)", color: "white" }}>
+            어드민으로 돌아가기
+          </Link>
+        </main>
       </div>
     );
   }

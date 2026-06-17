@@ -784,8 +784,8 @@ function HomeInner() {
           </div>
 
           <div className="flex items-center gap-2">
-            {/* 관리자: 데이터 업데이트 버튼 */}
-            {isAdmin && (
+            {/* 관리자: 데이터 업데이트 버튼 (라이브 서버 전용) */}
+            {isAdmin && process.env.NEXT_PUBLIC_STATIC !== "true" && (
               <button
                 onClick={handleTriggerScrape}
                 disabled={scrapeStatus?.is_running || scrapeTriggered}

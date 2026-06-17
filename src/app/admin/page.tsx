@@ -34,13 +34,10 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState("");
 
+  const isStaticMode = process.env.NEXT_PUBLIC_STATIC === "true" ||
+    (typeof window !== "undefined" && window.location.hostname.includes("github.io"));
+
   useEffect(() => {
-    // GitHub Pages 정적 모드에서는 관리자 기능 비활성화
-    if (window.location.hostname.includes("github.io") ||
-        process.env.NEXT_PUBLIC_STATIC === "true") {
-      router.replace("/");
-      return;
-    }
     const token = localStorage.getItem("tm_token");
     if (!token) { router.replace("/login"); return; }
     const u = localStorage.getItem("tm_user");
@@ -48,9 +45,13 @@ export default function AdminPage() {
       const role = JSON.parse(u).role;
       if (role !== "admin" && role !== "superadmin") { router.replace("/"); return; }
     }
+    if (isStaticMode) {
+      api.courses().then(cs => setCourses(cs)).finally(() => setLoading(false));
+      return;
+    }
     loadAll();
     loadScrapeStatus();
-  }, [router]);
+  }, [router]);  // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadAll = () => {
     Promise.all([api.adminStats(), api.courses(), api.activePromotions(), api.adminUsers()])
@@ -121,13 +122,58 @@ export default function AdminPage() {
     loadAll();
   };
 
-  if (loading || !stats) {
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: "var(--bg)" }}>
         <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
+
+  // ── 정적 모드 전용 허브 ──────────────────────────────────────────────────
+  if (isStaticMode) {
+    const hubItems = [
+      { icon: "📅", label: "시험 정보 / 취업 전망", desc: "시험 일정·접수일·과목·취업 전망 편집", href: "/admin/exam-info" },
+      { icon: "📚", label: "과목 관리",              desc: "과목 정보·강점·스크립트·FAQ 편집",   href: "/admin/courses" },
+    ];
+    return (
+      <div className="min-h-screen" style={{ background: "var(--bg)" }}>
+        <header className="flex items-center gap-4 px-6 py-4"
+                style={{ background: "var(--surface)", borderBottom: "1px solid var(--border)" }}>
+          <Link href="/" className="text-sm flex items-center gap-1.5" style={{ color: "var(--text-muted)" }}>
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>홈
+          </Link>
+          <span style={{ color: "var(--border)" }}>│</span>
+          <h1 className="font-bold">관리자 대시보드</h1>
+          <span className="ml-2 text-xs px-2 py-0.5 rounded-full"
+                style={{ background: "#FEF3C7", color: "#92400E", border: "1px solid #FDE68A" }}>
+            정적 모드
+          </span>
+        </header>
+        <main className="max-w-2xl mx-auto px-6 py-8 space-y-4">
+          <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+            GitHub Pages 정적 버전 — 가격 자동수집·사용자 관리는 라이브 서버에서만 사용 가능합니다.
+          </p>
+          {hubItems.map(it => (
+            <Link key={it.href} href={it.href}
+                  className="flex items-center gap-4 p-5 rounded-xl transition hover:opacity-80"
+                  style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
+              <span className="text-3xl">{it.icon}</span>
+              <div>
+                <p className="font-semibold text-sm" style={{ color: "var(--text)" }}>{it.label}</p>
+                <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>{it.desc}</p>
+              </div>
+              <span className="ml-auto text-sm" style={{ color: "var(--accent)" }}>→</span>
+            </Link>
+          ))}
+        </main>
+      </div>
+    );
+  }
+
+  if (!stats) return null;
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
