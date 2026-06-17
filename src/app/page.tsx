@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef, Suspense } from "react";
+import Link from "next/link";
 import { api, type Course, type ComparisonResponse, type Script, type ScrapeStatus } from "@/lib/api";
 
 // ── 타입 ──────────────────────────────────────────────────────────────────────
@@ -474,6 +475,87 @@ function ApiKeyModal({ onSave, onClose }: { onSave: (k: string) => void; onClose
   );
 }
 
+// ── 어드민 인라인 로그인 모달 ────────────────────────────────────────────────
+function AdminLoginModal({ onSuccess, onClose }: { onSuccess: () => void; onClose: () => void }) {
+  const [email, setEmail]   = useState("");
+  const [pw, setPw]         = useState("");
+  const [err, setErr]       = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const doLogin = async () => {
+    setErr(""); setLoading(true);
+    try {
+      const res = await api.login(email, pw);
+      if (res.user_role !== "admin" && res.user_role !== "superadmin") {
+        throw new Error("어드민 권한이 없습니다");
+      }
+      localStorage.setItem("tm_token", res.access_token);
+      localStorage.setItem("tm_user", JSON.stringify({ name: res.user_name, role: res.user_role }));
+      onSuccess();
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.5)" }}>
+      <div className="rounded-2xl p-6 w-full max-w-sm mx-4"
+           style={{ background: "var(--surface)", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="font-bold text-sm" style={{ color: "var(--eduwill-navy)" }}>⚙️ 어드민 로그인</h2>
+          <button onClick={onClose} style={{ color: "var(--text-muted)" }}>✕</button>
+        </div>
+        <input type="email" placeholder="이메일" value={email} onChange={e => setEmail(e.target.value)}
+               className="w-full px-4 py-2.5 rounded-xl text-sm mb-2 outline-none"
+               style={{ background: "var(--surface2)", border: "1.5px solid var(--border)", color: "var(--text)" }} />
+        <input type="password" placeholder="비밀번호" value={pw} onChange={e => setPw(e.target.value)}
+               onKeyDown={e => e.key === "Enter" && doLogin()}
+               className="w-full px-4 py-2.5 rounded-xl text-sm mb-3 outline-none"
+               style={{ background: "var(--surface2)", border: "1.5px solid var(--border)", color: "var(--text)" }} />
+        {err && <p className="text-xs mb-2" style={{ color: "#DC2626" }}>{err}</p>}
+        <button onClick={doLogin} disabled={loading || !email || !pw}
+                className="w-full py-2.5 rounded-xl text-sm font-bold disabled:opacity-40"
+                style={{ background: "var(--eduwill-navy)", color: "white" }}>
+          {loading ? "로그인 중…" : "로그인"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── 어드민 드롭다운 패널 ──────────────────────────────────────────────────────
+function AdminDropdown({ onClose, onLogout, courseId }: { onClose: () => void; onLogout: () => void; courseId: number | null }) {
+  const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+  const items = [
+    { icon: "🏠", label: "어드민 대시보드",     href: `${BASE_PATH}/admin` },
+    { icon: "💰", label: "가격 관리",           href: `${BASE_PATH}/admin/prices` },
+    { icon: "📅", label: "시험 정보 / 취업 전망", href: `${BASE_PATH}/admin/exam-info` },
+    { icon: "📚", label: "과목 관리",           href: `${BASE_PATH}/admin/courses` },
+  ];
+  return (
+    <>
+      <div className="fixed inset-0 z-40" onClick={onClose} />
+      <div className="absolute right-0 top-full mt-2 w-52 rounded-xl overflow-hidden z-50"
+           style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "0 8px 30px rgba(0,0,0,0.2)" }}>
+        {items.map(it => (
+          <Link key={it.href} href={it.href} onClick={onClose}
+                className="flex items-center gap-2.5 px-4 py-3 text-sm transition hover:opacity-80"
+                style={{ color: "var(--text)", borderBottom: "1px solid var(--border)" }}>
+            <span>{it.icon}</span>{it.label}
+          </Link>
+        ))}
+        <button onClick={onLogout}
+                className="w-full flex items-center gap-2.5 px-4 py-3 text-sm transition hover:opacity-80"
+                style={{ color: "#DC2626" }}>
+          <span>🚪</span>로그아웃
+        </button>
+      </div>
+    </>
+  );
+}
+
 // ── 가격 배지 ─────────────────────────────────────────────────────────────────
 function PriceBadge({ price, navy }: { price: string; navy?: boolean }) {
   const unknown = price === "가격 문의" || price === "미확인";
@@ -564,6 +646,8 @@ function HomeInner() {
   const [isAdmin, setIsAdmin]           = useState(false);
   const [scrapeStatus, setScrapeStatus] = useState<ScrapeStatus | null>(null);
   const [scrapeTriggered, setScrapeTriggered] = useState(false);
+  const [showAdminLogin, setShowAdminLogin]   = useState(false);
+  const [showAdminPanel, setShowAdminPanel]   = useState(false);
 
   const scriptEl = useRef<HTMLDivElement>(null);
 
@@ -650,6 +734,13 @@ function HomeInner() {
     }
   }, []);
 
+  const handleAdminLogout = useCallback(() => {
+    localStorage.removeItem("tm_token");
+    localStorage.removeItem("tm_user");
+    setIsAdmin(false);
+    setShowAdminPanel(false);
+  }, []);
+
   const filteredCourses = courses.filter(c => {
     const catMatch = category === "all" || c.category === category;
     const searchMatch = !search || c.name.includes(search);
@@ -674,6 +765,12 @@ function HomeInner() {
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
       {showModal && <ApiKeyModal onSave={saveKey} onClose={() => setShowModal(false)} />}
+      {showAdminLogin && (
+        <AdminLoginModal
+          onSuccess={() => { setIsAdmin(true); setShowAdminLogin(false); setShowAdminPanel(true); }}
+          onClose={() => setShowAdminLogin(false)}
+        />
+      )}
 
       {/* ── 헤더 ── */}
       <header style={{ background: "var(--eduwill-navy)", borderBottom: "3px solid var(--eduwill-yellow)" }}>
@@ -707,6 +804,27 @@ function HomeInner() {
                 ) : "🔄 가격 업데이트"}
               </button>
             )}
+
+            {/* 어드민 버튼 — 항상 표시 */}
+            <div className="relative">
+              <button
+                onClick={() => isAdmin ? setShowAdminPanel(p => !p) : setShowAdminLogin(true)}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-medium transition"
+                style={{
+                  background: isAdmin ? "rgba(255,210,0,0.2)" : "rgba(255,255,255,0.08)",
+                  color:      isAdmin ? "var(--eduwill-yellow)" : "rgba(255,255,255,0.5)",
+                  border:     `1px solid ${isAdmin ? "rgba(255,210,0,0.4)" : "rgba(255,255,255,0.15)"}`,
+                }}>
+                {isAdmin ? "⚙️ 관리" : "🔐"}
+              </button>
+              {isAdmin && showAdminPanel && (
+                <AdminDropdown
+                  onClose={() => setShowAdminPanel(false)}
+                  onLogout={handleAdminLogout}
+                  courseId={courseId}
+                />
+              )}
+            </div>
 
             <button onClick={() => setShowModal(true)}
                     className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-medium transition"
