@@ -104,6 +104,18 @@ function getDataAge(isoDate: string | null | undefined): DataAge {
 }
 
 // ── AI 스크립트 생성 ──────────────────────────────────────────────────────────
+
+const ALL_COMPETITORS = [
+  "해커스", "박문각", "메가랜드", "공단기", "시대에듀", "에듀피디",
+  "넥스트공무원", "지안에듀", "유상통", "계리단기", "국자감", "검스타트",
+  "다산에듀", "대산전기", "모아바", "성안당", "배울학", "에듀야", "합격의법학원",
+];
+
+function filterAdvantages(advantages: string[], targetCompetitor: string): string[] {
+  const others = ALL_COMPETITORS.filter(c => c !== targetCompetitor);
+  return advantages.filter(a => !others.some(c => a.includes(c)));
+}
+
 function buildPrompt(course: string, sit: string, ew: EProduct[], ci: CompInfo): string {
   const sitLabel: Record<string, string> = {
     타사비교: "고객이 타사와 비교 중",
@@ -111,23 +123,37 @@ function buildPrompt(course: string, sit: string, ew: EProduct[], ci: CompInfo):
     첫상담:   "첫 번째 상담",
     재상담:   "재상담 고객",
   };
+
+  const cleanAdvantages = filterAdvantages(ci.advantages, ci.name).slice(0, 4);
+
   return `당신은 에듀윌 TM 상담사 전문 코치입니다.
+고객이 비교하는 경쟁사는 오직 【${ci.name}】입니다.
+스크립트에서 반드시 【${ci.name}】만 언급하고, 다른 경쟁사(해커스·박문각·공단기 등)는 절대 언급하지 마세요.
 
-과목: ${course} | 상황: ${sitLabel[sit] || sit} | 경쟁사: ${ci.name}
+[상담 정보]
+과목: ${course}
+상황: ${sitLabel[sit] || sit}
+비교 대상: ${ci.name}
 
-에듀윌 상품:
+[에듀윌 상품]
 ${ew.map(p => `• ${p.name} (${p.price})`).join("\n")}
 
-${ci.name} 상품:
-${ci.products.map(p => `• ${p.name}: ${p.price}`).join("\n")}
+[${ci.name} 상품]
+${ci.products.length > 0
+  ? ci.products.map(p => `• ${p.name}: ${p.price}`).join("\n")
+  : "• 상품 정보 없음"}
 
-에듀윌 차별점:
-${ci.advantages.slice(0,4).map(a => `• ${a}`).join("\n")}
+[에듀윌의 ${ci.name} 대비 강점]
+${cleanAdvantages.length > 0
+  ? cleanAdvantages.map(a => `• ${a}`).join("\n")
+  : "• 합격률, 강사진, 학습관리 시스템 우위"}
 
-상담사가 고객에게 바로 말할 수 있는 자연스러운 상담 스크립트를 작성해주세요.
-- 경쟁사를 비방하지 않고 에듀윌 강점을 자연스럽게 부각
-- 친근하고 전문적인 한국어, 1인칭 대화체
-- 3~4문장, 200자 내외로 간결하게`;
+[작성 조건]
+- 비교 대상은 반드시 ${ci.name}만 언급 (다른 경쟁사명 사용 금지)
+- ${ci.name}을 직접 비방하지 않고 에듀윌 강점 자연스럽게 부각
+- 친근하고 전문적인 한국어 1인칭 대화체
+- 3~4문장, 200자 내외로 간결하게
+- 바로 사용 가능한 완성형 스크립트만 작성`;
 }
 
 const GEMINI_FALLBACK_MODELS = [
