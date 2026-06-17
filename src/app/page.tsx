@@ -8,6 +8,125 @@ interface EProduct { name: string; price: string; features: string[] }
 interface CProduct { name: string; price: string }
 interface CompInfo  { id: number; name: string; products: CProduct[]; advantages: string[] }
 
+// ── 사이트 바로가기 URL 맵 ──────────────────────────────────────────────────────
+
+// 에듀윌 과목별 상품 페이지 (직접 확인용)
+const EDUWILL_URLS: Record<string, string> = {
+  "공인중개사":   "https://land.eduwill.net/",
+  "주택관리사":   "https://housing.eduwill.net/",
+  "행정사":       "https://adm.eduwill.net/",
+  "사회복지사1급": "https://welfare.eduwill.net/",
+  "9급공무원":    "https://gosi.eduwill.net/",
+  "경비지도사":   "https://security.eduwill.net/",
+  "전기기사":     "https://electric.eduwill.net/",
+  "소방설비기사": "https://fire.eduwill.net/",
+  "계리직공무원": "https://kaeri.eduwill.net/",
+  "검정고시":     "https://gumjung.eduwill.net/",
+  "손해평가사":   "https://damage.eduwill.net/",
+};
+
+// 경쟁사별·과목별 수강료 확인 페이지 (스크래퍼 확인 URL 기준)
+const COMPETITOR_URLS: Record<string, Record<string, string>> = {
+  "박문각": {
+    "공인중개사":   "https://www.pmg.co.kr/user/plo/event/event_allpass.asp",
+    "주택관리사":   "https://www.pmg.co.kr/user/pho/main.asp",
+    "행정사":       "https://www.pmg.co.kr/user/phjo/main.asp",
+    "사회복지사1급": "https://www.pmg.co.kr/user/human/main.asp",
+    "9급공무원":    "https://www.pmg.co.kr/user/pno/main.asp",
+    "손해평가사":   "https://www.pmg.co.kr/user/spo/main.asp",
+  },
+  "해커스": {
+    "공인중개사":   "https://land.hackers.com/",
+    "주택관리사":   "https://house.hackers.com/",
+    "사회복지사1급": "https://sabok.edu2080.co.kr/",
+    "검정고시":     "https://gumjung.edu2080.co.kr/",
+    "9급공무원":    "https://egosi.hackers.com/site/?c=lec_9&bcart=1",
+    "계리직공무원": "https://egosi.hackers.com/site/?c=lec_accounting",
+  },
+  "메가랜드": {
+    "공인중개사":   "https://www.megaland.co.kr/lecture/",
+  },
+  "합격의법학원": {
+    "행정사":       "https://adm.lawschool.co.kr/nlawschool/lecture/lecture.asp?field=35",
+  },
+  "시대에듀": {
+    "경비지도사":   "https://www.sdedu.co.kr/cp/?cat_id=001002",
+  },
+  "에듀피디": {
+    "경비지도사":   "https://www.edupd.com/lectureMK01/autolecture.htm?here=licence&pk=PK0000008L&tap=0",
+  },
+  "다산에듀": {
+    "전기기사":     "https://www.e-dasan.net/shopList?cat=13",
+  },
+  "대산전기": {
+    "전기기사":     "https://www.dsan.co.kr/online/main/index.jsp",
+  },
+  "모아바": {
+    "소방설비기사": "https://fireegfp.moa-ba.com/lecture.php?code=010301&menu_code=0107",
+  },
+  "성안당": {
+    "소방설비기사": "https://bm.cyber.co.kr/lecture.php?action=list&code=01010101",
+  },
+  "배울학": {
+    "소방설비기사": "https://fire.baeulhak.com/",
+  },
+  "공단기": {
+    "9급공무원":    "https://gong.conects.com/freepass/renewal/9th",
+  },
+  "넥스트공무원": {
+    "9급공무원":    "https://www.megagong.net/s/gong/pass/newsale_2026.asp",
+  },
+  "검스타트": {
+    "검정고시":     "https://gumstart.sinjiwonedu.co.kr/",
+  },
+  "국자감": {
+    "검정고시":     "http://www.kukjagam.co.kr/",
+  },
+  "유상통": {
+    "계리직공무원": "https://yusangtong.com/",
+  },
+  "지안에듀": {
+    "계리직공무원": "https://www.jianedu.co.kr/",
+  },
+  "계리단기": {
+    "계리직공무원": "https://kaeri-danki.com/",
+  },
+  "에듀야": {
+    "손해평가사":   "https://sh.eduyaa.com/main/",
+  },
+};
+
+function getLinkUrl(competitorName: string | undefined, courseName: string | undefined): string {
+  if (!competitorName || !courseName) return "";
+  return COMPETITOR_URLS[competitorName]?.[courseName] ?? "";
+}
+
+function getEduwillUrl(courseName: string | undefined): string {
+  if (!courseName) return "";
+  return EDUWILL_URLS[courseName] ?? "";
+}
+
+// ── 바로가기 버튼 ──────────────────────────────────────────────────────────────
+function LinkButton({ url, light }: { url: string; light?: boolean }) {
+  if (!url) return null;
+  return (
+    <a href={url} target="_blank" rel="noopener noreferrer"
+       onClick={e => e.stopPropagation()}
+       className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-lg font-semibold transition shrink-0"
+       style={{
+         background: light ? "rgba(255,255,255,0.15)" : "rgba(28,43,94,0.08)",
+         color:      light ? "rgba(255,255,255,0.9)"  : "var(--accent)",
+         border:     light ? "1px solid rgba(255,255,255,0.25)" : "1px solid rgba(79,127,255,0.3)",
+         textDecoration: "none",
+       }}>
+      바로가기
+      <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+      </svg>
+    </a>
+  );
+}
+
 // ── 카테고리 정의 ─────────────────────────────────────────────────────────────
 const CATEGORIES = [
   { key: "all",  label: "전체" },
@@ -716,10 +835,13 @@ function HomeInner() {
                     <span className="text-xs font-bold block" style={{ color: "var(--eduwill-yellow)" }}>에듀윌</span>
                     <span className="text-sm font-bold text-white">{course?.name}</span>
                   </div>
-                  <span className="ml-auto text-xs px-2 py-0.5 rounded-full font-bold"
-                        style={{ background: "var(--eduwill-yellow)", color: "var(--eduwill-navy)" }}>
-                    자사 상품
-                  </span>
+                  <div className="ml-auto flex items-center gap-2">
+                    <LinkButton url={getEduwillUrl(course?.name)} light />
+                    <span className="text-xs px-2 py-0.5 rounded-full font-bold"
+                          style={{ background: "var(--eduwill-yellow)", color: "var(--eduwill-navy)" }}>
+                      자사 상품
+                    </span>
+                  </div>
                 </div>
                 <div className="p-4 space-y-3">
                   {ewProds.map((p, i) => (
@@ -754,19 +876,23 @@ function HomeInner() {
                     <span className="text-xs font-bold block text-gray-400">경쟁사</span>
                     <span className="text-sm font-bold text-gray-800">{ci?.name || "—"} {course?.name}</span>
                   </div>
-                  {ci && (
-                    <div className="flex flex-col items-end gap-1">
-                      <span className="text-xs px-2.5 py-1 rounded-full font-medium"
-                            style={{ background: "#F3F4F6", color: "#6B7280" }}>{ci.products.length}개 상품</span>
-                      {/* 가격 미확인 항목 수 표시 */}
-                      {ci.products.filter(p => p.price === "가격 문의").length > 0 && (
-                        <span className="text-xs px-2 py-0.5 rounded-full"
-                              style={{ background: "#FEF3C7", color: "#D97706" }}>
-                          {ci.products.filter(p => p.price === "가격 문의").length}개 미확인
-                        </span>
-                      )}
-                    </div>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {ci && (
+                      <>
+                        <LinkButton url={getLinkUrl(ci.name, course?.name)} />
+                        <div className="flex flex-col items-end gap-1">
+                          <span className="text-xs px-2.5 py-1 rounded-full font-medium"
+                                style={{ background: "#F3F4F6", color: "#6B7280" }}>{ci.products.length}개 상품</span>
+                          {ci.products.filter(p => p.price === "가격 문의").length > 0 && (
+                            <span className="text-xs px-2 py-0.5 rounded-full"
+                                  style={{ background: "#FEF3C7", color: "#D97706" }}>
+                              {ci.products.filter(p => p.price === "가격 문의").length}개 미확인
+                            </span>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
                 </div>
                 {ci ? (
                   <div className="p-4 space-y-4">
