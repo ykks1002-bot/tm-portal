@@ -22,7 +22,7 @@ const EDUWILL_URLS: Record<string, string> = {
   "소방설비기사": "https://fire.eduwill.net/",
   "계리직공무원": "https://kpost.eduwill.net/",
   "검정고시":     "https://pass.eduwill.net/",
-  "손해평가사":   "https://www.eduwill.net/",
+  "손해평가사":   "https://sp.eduwill.net/sites/home",
 };
 
 // 경쟁사별·과목별 수강료 확인 페이지 (스크래퍼 확인 URL 기준)
