@@ -13,16 +13,16 @@ interface CompInfo  { id: number; name: string; products: CProduct[]; advantages
 // 에듀윌 과목별 상품 페이지 (직접 확인용)
 const EDUWILL_URLS: Record<string, string> = {
   "공인중개사":   "https://land.eduwill.net/",
-  "주택관리사":   "https://housing.eduwill.net/",
-  "행정사":       "https://adm.eduwill.net/",
-  "사회복지사1급": "https://welfare.eduwill.net/",
-  "9급공무원":    "https://gosi.eduwill.net/",
-  "경비지도사":   "https://security.eduwill.net/",
-  "전기기사":     "https://electric.eduwill.net/",
+  "주택관리사":   "https://house.eduwill.net/",
+  "행정사":       "https://admin.eduwill.net/",
+  "사회복지사1급": "https://social.eduwill.net/",
+  "9급공무원":    "https://civil.eduwill.net/",
+  "경비지도사":   "https://guard.eduwill.net/",
+  "전기기사":     "https://elec.eduwill.net/",
   "소방설비기사": "https://fire.eduwill.net/",
-  "계리직공무원": "https://kaeri.eduwill.net/",
-  "검정고시":     "https://gumjung.eduwill.net/",
-  "손해평가사":   "https://damage.eduwill.net/",
+  "계리직공무원": "https://kpost.eduwill.net/",
+  "검정고시":     "https://pass.eduwill.net/",
+  "손해평가사":   "https://www.eduwill.net/",
 };
 
 // 경쟁사별·과목별 수강료 확인 페이지 (스크래퍼 확인 URL 기준)
@@ -74,7 +74,7 @@ const COMPETITOR_URLS: Record<string, Record<string, string>> = {
     "9급공무원":    "https://gong.conects.com/freepass/renewal/9th",
   },
   "넥스트공무원": {
-    "9급공무원":    "https://www.megagong.net/s/gong/pass/newsale_2026.asp",
+    "9급공무원":    "https://www.megagong.net/s/gong/pass/double_sale_2026.asp",
   },
   "검스타트": {
     "검정고시":     "https://gumstart.sinjiwonedu.co.kr/",
