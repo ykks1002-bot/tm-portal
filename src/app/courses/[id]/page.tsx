@@ -10,15 +10,19 @@ import {
   type StrengthPoint,
   type Script,
   type FAQ,
+  type ExamSchedule,
+  type EmploymentStat,
 } from "@/lib/api";
 
-type Tab = "comparison" | "strengths" | "scripts" | "faq";
+type Tab = "comparison" | "strengths" | "scripts" | "faq" | "exam" | "employment";
 
 const TABS: { id: Tab; label: string; icon: string }[] = [
-  { id: "comparison", label: "상품 비교표",    icon: "⚖️" },
-  { id: "strengths",  label: "에듀윌 강점",    icon: "🚀" },
-  { id: "scripts",    label: "상담 스크립트",  icon: "📞" },
-  { id: "faq",        label: "FAQ / 반론 대응", icon: "💬" },
+  { id: "comparison",  label: "상품 비교표",    icon: "⚖️" },
+  { id: "strengths",   label: "에듀윌 강점",    icon: "🚀" },
+  { id: "scripts",     label: "상담 스크립트",  icon: "📞" },
+  { id: "faq",         label: "FAQ / 반론 대응", icon: "💬" },
+  { id: "exam",        label: "시험 정보",       icon: "📅" },
+  { id: "employment",  label: "취업 전망",       icon: "📈" },
 ];
 
 const SITUATION_LABEL: Record<string, string> = {
@@ -423,6 +427,259 @@ function EmptyState({ message }: { message: string }) {
   );
 }
 
+// ── 시험 정보 탭 ───────────────────────────────────────────────────────────────
+function ExamTab({ schedules }: { schedules: ExamSchedule[] }) {
+  if (!schedules.length) return <EmptyState message="등록된 시험 일정이 없습니다." />;
+
+  return (
+    <div className="space-y-6">
+      {schedules.map(s => {
+        const subjects: { round: string; name: string; count: string; time: string }[] =
+          s.subjects_json ? JSON.parse(s.subjects_json) : [];
+        const rounds = Array.from(new Set(subjects.map(x => x.round)));
+
+        return (
+          <div key={s.id} className="rounded-2xl overflow-hidden"
+               style={{ border: "1px solid var(--border)", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+            {/* 헤더 */}
+            <div className="px-5 py-3.5 flex items-center justify-between"
+                 style={{ background: "var(--eduwill-navy)" }}>
+              <div className="flex items-center gap-3">
+                <span className="text-white font-bold text-base">
+                  {s.year}년 {s.round_label}
+                </span>
+                {s.organizer && (
+                  <span className="text-xs px-2.5 py-0.5 rounded-full font-medium"
+                        style={{ background: "rgba(255,255,255,0.15)", color: "rgba(255,255,255,0.85)" }}>
+                    {s.organizer}
+                  </span>
+                )}
+              </div>
+              {s.data_source === "manual" && (
+                <span className="text-xs px-2 py-0.5 rounded-full"
+                      style={{ background: "rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.55)" }}>
+                  수동 입력
+                </span>
+              )}
+            </div>
+
+            <div className="p-5 grid gap-5" style={{ gridTemplateColumns: "1fr 1fr" }}>
+              {/* 좌: 접수·시험 일정 */}
+              <div>
+                <h3 className="text-xs font-bold uppercase mb-3 tracking-wider"
+                    style={{ color: "var(--text-muted)" }}>📅 시험 일정</h3>
+                <div className="space-y-2.5">
+                  {[
+                    { label: "필기(1차) 원서접수",  start: s.written_reg_start,  end: s.written_reg_end },
+                    { label: "필기(1차) 시험일",    date: s.written_exam_date },
+                    { label: "필기(1차) 합격발표",  date: s.written_result_date },
+                    ...(s.practical_exam_date ? [
+                      { label: "실기(2차) 원서접수", start: s.practical_reg_start, end: s.practical_reg_end },
+                      { label: "실기(2차) 시험일",   date: s.practical_exam_date },
+                      { label: "실기(2차) 합격발표", date: s.practical_result_date },
+                    ] : []),
+                  ].filter(row => row.date || row.start).map((row, i) => (
+                    <div key={i} className="flex gap-2 text-sm">
+                      <span className="shrink-0 w-36 text-xs pt-0.5" style={{ color: "var(--text-muted)" }}>
+                        {row.label}
+                      </span>
+                      <span className="font-medium" style={{ color: "var(--text)" }}>
+                        {row.date ?? `${row.start} ~ ${row.end}`}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* 응시료 */}
+                {s.exam_fee && (
+                  <div className="mt-4 flex items-center gap-2">
+                    <span className="text-xs" style={{ color: "var(--text-muted)" }}>💰 응시료</span>
+                    <span className="text-sm font-semibold" style={{ color: "var(--eduwill-navy)" }}>
+                      {s.exam_fee}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* 우: 시험과목 */}
+              <div>
+                <h3 className="text-xs font-bold uppercase mb-3 tracking-wider"
+                    style={{ color: "var(--text-muted)" }}>📋 시험과목 및 시험시간</h3>
+                <div className="space-y-3">
+                  {rounds.map(round => (
+                    <div key={round}>
+                      <div className="text-xs font-bold mb-1.5 px-2 py-0.5 rounded inline-block"
+                           style={{ background: "rgba(0,45,105,0.08)", color: "var(--eduwill-navy)" }}>
+                        {round}
+                      </div>
+                      <div className="space-y-1">
+                        {subjects.filter(x => x.round === round).map((subj, si) => (
+                          <div key={si} className="flex items-start justify-between text-xs gap-2 px-2 py-1.5 rounded-lg"
+                               style={{ background: "var(--surface2)" }}>
+                            <span style={{ color: "var(--text)" }}>{subj.name}</span>
+                            <div className="shrink-0 flex gap-1.5 text-right">
+                              {subj.count && (
+                                <span className="px-1.5 py-0.5 rounded text-xs"
+                                      style={{ background: "rgba(79,127,255,0.1)", color: "var(--accent)" }}>
+                                  {subj.count}
+                                </span>
+                              )}
+                              {subj.time && (
+                                <span className="px-1.5 py-0.5 rounded text-xs"
+                                      style={{ background: "rgba(0,0,0,0.05)", color: "var(--text-muted)" }}>
+                                  {subj.time}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* 유의사항 */}
+            {s.notes && (
+              <div className="px-5 pb-5">
+                <div className="rounded-xl p-4"
+                     style={{ background: "#FFFDF0", borderLeft: "3px solid var(--eduwill-yellow)" }}>
+                  <div className="text-xs font-bold mb-2" style={{ color: "var(--eduwill-navy)" }}>
+                    ⚠️ 유의사항
+                  </div>
+                  <p className="text-xs leading-relaxed whitespace-pre-line" style={{ color: "#374151" }}>
+                    {s.notes}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* 출처 */}
+            {s.source_url && (
+              <div className="px-5 pb-4 flex items-center gap-1.5">
+                <span className="text-xs" style={{ color: "var(--text-muted)" }}>출처:</span>
+                <a href={s.source_url} target="_blank" rel="noopener noreferrer"
+                   className="text-xs hover:underline" style={{ color: "var(--accent)" }}>
+                  {s.source_url}
+                </a>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── 취업 전망 탭 ───────────────────────────────────────────────────────────────
+const OUTLOOK_CONFIG: Record<string, { label: string; color: string; bg: string; bar: number }> = {
+  증가:     { label: "증가",     color: "#166534", bg: "#DCFCE7", bar: 90 },
+  다소증가: { label: "다소 증가", color: "#1D4ED8", bg: "#EFF6FF", bar: 70 },
+  유지:     { label: "유지",     color: "#92400E", bg: "#FFFBEB", bar: 50 },
+  다소감소: { label: "다소 감소", color: "#C2410C", bg: "#FFF7ED", bar: 30 },
+  감소:     { label: "감소",     color: "#DC2626", bg: "#FEF2F2", bar: 15 },
+};
+
+function EmploymentTab({ stat }: { stat: EmploymentStat | null }) {
+  if (!stat) return <EmptyState message="등록된 취업 전망 데이터가 없습니다." />;
+
+  const talkingPoints: string[] = stat.talking_points_json
+    ? JSON.parse(stat.talking_points_json) : [];
+  const outlook = stat.employment_outlook
+    ? (OUTLOOK_CONFIG[stat.employment_outlook] ?? OUTLOOK_CONFIG["유지"]) : null;
+
+  return (
+    <div className="space-y-5">
+      {/* 핵심 지표 카드 3개 */}
+      <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
+        {[
+          { icon: "👥", label: "종사자 수",  value: stat.worker_count },
+          { icon: "💵", label: "평균 임금",  value: stat.avg_wage },
+          { icon: "📈", label: "고용 전망",  value: outlook?.label, badge: true, color: outlook?.color, bg: outlook?.bg },
+        ].filter(c => c.value).map((card, i) => (
+          <div key={i} className="rounded-2xl p-5 flex flex-col gap-2"
+               style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
+            <span className="text-2xl">{card.icon}</span>
+            <span className="text-xs" style={{ color: "var(--text-muted)" }}>{card.label}</span>
+            {card.badge ? (
+              <span className="inline-block text-sm font-bold px-3 py-1 rounded-full w-fit"
+                    style={{ background: card.bg, color: card.color }}>
+                {card.value}
+              </span>
+            ) : (
+              <span className="text-lg font-bold" style={{ color: "var(--eduwill-navy)" }}>
+                {card.value}
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* 전망 상세 */}
+      {(stat.outlook_detail || outlook) && (
+        <div className="rounded-2xl p-5"
+             style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
+          {outlook && (
+            <div className="flex items-center gap-3 mb-4">
+              <span className="text-sm font-bold" style={{ color: "var(--text)" }}>고용 전망 지수</span>
+              <div className="flex-1 rounded-full h-2.5 overflow-hidden"
+                   style={{ background: "var(--surface2)" }}>
+                <div className="h-full rounded-full transition-all duration-700"
+                     style={{ width: `${outlook.bar}%`, background: outlook.color }} />
+              </div>
+              <span className="text-sm font-semibold" style={{ color: outlook.color }}>
+                {outlook.label}
+              </span>
+            </div>
+          )}
+          {stat.outlook_detail && (
+            <p className="text-sm leading-relaxed" style={{ color: "var(--text)" }}>
+              {stat.outlook_detail}
+            </p>
+          )}
+          {stat.stat_year && (
+            <p className="text-xs mt-3" style={{ color: "var(--text-muted)" }}>
+              기준: {stat.stat_year}년 | 출처: {stat.data_source}
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* 상담 활용 포인트 */}
+      {talkingPoints.length > 0 && (
+        <div className="rounded-2xl p-5"
+             style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
+          <div className="flex items-center gap-2 mb-4">
+            <span className="text-base">📌</span>
+            <h3 className="font-bold text-sm" style={{ color: "var(--eduwill-navy)" }}>
+              상담 활용 포인트
+            </h3>
+            <span className="text-xs px-2 py-0.5 rounded-full ml-1"
+                  style={{ background: "rgba(0,45,105,0.08)", color: "var(--eduwill-navy)" }}>
+              TM 상담 시 직접 활용
+            </span>
+          </div>
+          <div className="space-y-2.5">
+            {talkingPoints.map((pt, i) => (
+              <div key={i} className="flex items-start gap-3 rounded-xl px-4 py-3"
+                   style={{ background: "rgba(0,45,105,0.04)", border: "1px solid rgba(0,45,105,0.08)" }}>
+                <span className="shrink-0 text-xs font-bold mt-0.5 w-5 h-5 rounded-full flex items-center justify-center"
+                      style={{ background: "var(--eduwill-navy)", color: "white" }}>
+                  {i + 1}
+                </span>
+                <span className="text-sm leading-snug" style={{ color: "var(--text)" }}>
+                  {pt}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── 메인 ──────────────────────────────────────────────────────────────────────
 function CoursePageInner({ params }: { params: Promise<{ id: string }> }) {
   const { id }      = use(params);
@@ -443,6 +700,8 @@ function CoursePageInner({ params }: { params: Promise<{ id: string }> }) {
   const [strengths, setStrengths]   = useState<StrengthPoint[]>([]);
   const [scripts, setScripts]       = useState<Script[]>([]);
   const [faqs, setFaqs]             = useState<FAQ[]>([]);
+  const [examSchedules, setExamSchedules] = useState<ExamSchedule[]>([]);
+  const [employmentStat, setEmploymentStat] = useState<EmploymentStat | null>(null);
   const [loading, setLoading]       = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -456,10 +715,13 @@ function CoursePageInner({ params }: { params: Promise<{ id: string }> }) {
       api.strengths(courseId),
       api.scripts(courseId),
       api.faq(courseId),
+      api.examSchedules(courseId),
+      api.employmentStat(courseId).catch(() => null),
     ])
-      .then(([comp, str, sc, fq]) => {
+      .then(([comp, str, sc, fq, exams, emp]) => {
         setComparison(comp); setStrengths(str);
         setScripts(sc);      setFaqs(fq);
+        setExamSchedules(exams); setEmploymentStat(emp);
       })
       .catch(() => router.replace("/"))
       .finally(() => { setLoading(false); setRefreshing(false); });
@@ -556,9 +818,11 @@ function CoursePageInner({ params }: { params: Promise<{ id: string }> }) {
             onClearFilter={() => setFilterCompetitorId(null)}
           />
         )}
-        {tab === "strengths"  && <StrengthsTab strengths={strengths} />}
-        {tab === "scripts"    && <ScriptsTab scripts={scripts} />}
-        {tab === "faq"        && <FAQTab faqs={faqs} />}
+        {tab === "strengths"   && <StrengthsTab strengths={strengths} />}
+        {tab === "scripts"     && <ScriptsTab scripts={scripts} />}
+        {tab === "faq"         && <FAQTab faqs={faqs} />}
+        {tab === "exam"        && <ExamTab schedules={examSchedules} />}
+        {tab === "employment"  && <EmploymentTab stat={employmentStat} />}
       </main>
     </div>
   );

@@ -51,6 +51,10 @@ function apiPathToDataFile(path: string): string {
   if (p === "promotions/active") return "promotions.json";
   const m = p.match(/^courses\/(\d+)\/(comparison|strengths|scripts|faq)$/);
   if (m) return `course-${m[1]}-${m[2]}.json`;
+  const me = p.match(/^courses\/(\d+)\/exam-schedules$/);
+  if (me) return `course-${me[1]}-exam.json`;
+  const mep = p.match(/^courses\/(\d+)\/employment-stat$/);
+  if (mep) return `course-${mep[1]}-employment.json`;
   throw new Error(`정적 파일 없음: ${path}`);
 }
 
@@ -68,13 +72,13 @@ async function get<T>(path: string): Promise<T> {
 
 // ── 정적 모드 로그인 (백엔드 없이 .env.local 비밀번호로 인증) ─────────────────
 function staticLogin(email: string, password: string) {
-  const expected = process.env.NEXT_PUBLIC_STATIC_PASSWORD ?? "eduwill2026!";
+  const expected     = process.env.NEXT_PUBLIC_STATIC_PASSWORD     ?? "eduwill2026!";
+  const adminExpected = process.env.NEXT_PUBLIC_STATIC_ADMIN_PASSWORD ?? "eduwill-admin2026!";
+  if (password === adminExpected) {
+    return Promise.resolve({ access_token: "static-admin", user_name: email.split("@")[0], user_role: "admin" });
+  }
   if (password !== expected) return Promise.reject(new Error("비밀번호가 올바르지 않습니다"));
-  return Promise.resolve({
-    access_token: "static-local",
-    user_name: email.split("@")[0],
-    user_role: "agent",
-  });
+  return Promise.resolve({ access_token: "static-local", user_name: email.split("@")[0], user_role: "agent" });
 }
 
 // ── 공개 API ─────────────────────────────────────────────────────────────────
@@ -162,6 +166,16 @@ export const api = {
   // Scrape Control
   triggerScrape: () => request<{ ok: boolean; message: string }>("/api/admin/scrape/trigger", { method: "POST" }),
   scrapeStatus: () => request<ScrapeStatus>("/api/admin/scrape/status"),
+
+  // Exam & Employment
+  examSchedules: (courseId: number) => get<ExamSchedule[]>(`/api/courses/${courseId}/exam-schedules`),
+  updateExamSchedule: (id: number, body: Partial<ExamSchedule>) =>
+    request(`/api/exam-schedules/${id}`, { method: "PUT", body: JSON.stringify(body) }),
+  createExamSchedule: (courseId: number, body: Partial<ExamSchedule>) =>
+    request(`/api/courses/${courseId}/exam-schedules`, { method: "POST", body: JSON.stringify(body) }),
+  employmentStat: (courseId: number) => get<EmploymentStat>(`/api/courses/${courseId}/employment-stat`),
+  updateEmploymentStat: (id: number, body: Partial<EmploymentStat>) =>
+    request(`/api/employment-stats/${id}`, { method: "PUT", body: JSON.stringify(body) }),
 };
 
 // Types
@@ -210,7 +224,7 @@ export interface AdminStats {
 export interface PriceRow {
   item_id: number; competitor_id: number | null;
   course_name: string; course_icon: string;
-  item_name: string; competitor_name: string;
+  item_name: string; item_description: string; competitor_name: string;
   value_text: string; updated_at: string | null;
 }
 export interface PriceAlert {
@@ -223,4 +237,24 @@ export interface ScrapeStatus {
   last_run_at: string | null;
   last_success_at: string | null;
   message: string;
+}
+export interface ExamSchedule {
+  id: number; course_id: number;
+  year?: number; round_label?: string;
+  subjects_json?: string; exam_fee?: string;
+  written_reg_start?: string; written_reg_end?: string;
+  written_exam_date?: string; written_result_date?: string;
+  practical_reg_start?: string; practical_reg_end?: string;
+  practical_exam_date?: string; practical_result_date?: string;
+  notes?: string; organizer?: string;
+  source_url?: string; data_source?: string;
+  updated_at?: string | null;
+}
+export interface EmploymentStat {
+  id: number; course_id: number;
+  worker_count?: string; avg_wage?: string;
+  employment_outlook?: string; outlook_detail?: string;
+  talking_points_json?: string;
+  stat_year?: string; data_source?: string; source_url?: string;
+  updated_at?: string | null;
 }

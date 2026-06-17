@@ -1,0 +1,10 @@
+[{
+  "id": 1, "course_id": 1, "year": 2026, "round_label": "제37회",
+  "organizer": "한국산업인력공단",
+  "subjects_json": "[{\"round\":\"1차\",\"name\":\"부동산학개론\",\"count\":\"40문항\",\"time\":\"50분\"},{\"round\":\"1차\",\"name\":\"민법 및 민사특별법\",\"count\":\"40문항\",\"time\":\"50분\"},{\"round\":\"2차\",\"name\":\"공인중개사법령 및 실무\",\"count\":\"40문항\",\"time\":\"50분\"},{\"round\":\"2차\",\"name\":\"부동산공법\",\"count\":\"40문항\",\"time\":\"50분\"},{\"round\":\"2차\",\"name\":\"부동산공시법령 및 부동산세법\",\"count\":\"40문항\",\"time\":\"50분\"}]",
+  "exam_fee": "1차 13,700원 / 2차 14,300원",
+  "written_reg_start": "2026.08.03", "written_reg_end": "2026.08.07",
+  "written_exam_date": "2026.10.31 (1·2차 동시)", "written_result_date": "2026.12.02",
+  "notes": "• 신분증 필참\n• 전 과목 40점 이상 + 평균 60점 이상 합격\n• 합격 후 중개사무소 개설등록 가능",
+  "source_url": "https://www.q-net.or.kr", "data_source": "manual"
+}]

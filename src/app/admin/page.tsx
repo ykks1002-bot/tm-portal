@@ -203,6 +203,25 @@ export default function AdminPage() {
           )}
         </div>
 
+        {/* 시험 정보 / 취업 전망 바로가기 */}
+        <div className="rounded-xl p-5 flex items-center justify-between"
+             style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">📅</span>
+            <div>
+              <p className="font-semibold text-sm" style={{ color: "var(--text)" }}>시험 정보 / 취업 전망</p>
+              <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
+                시험 일정·접수일·과목 및 취업 전망 관리
+              </p>
+            </div>
+          </div>
+          <Link href="/admin/exam-info"
+                className="text-sm px-4 py-2 rounded-lg font-semibold transition"
+                style={{ background: "var(--accent)", color: "white" }}>
+            관리 →
+          </Link>
+        </div>
+
         {/* 가격 관리 바로가기 */}
         <div className="rounded-xl p-5 flex items-center justify-between"
              style={{ background: "var(--surface)", border: pendingAlerts > 0 ? "1.5px solid #FBBF24" : "1px solid var(--border)" }}>

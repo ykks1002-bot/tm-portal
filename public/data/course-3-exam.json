@@ -1,0 +1,12 @@
+[{
+  "id": 3, "course_id": 3, "year": 2026, "round_label": "제14회",
+  "organizer": "행정안전부 / 한국산업인력공단",
+  "subjects_json": "[{\"round\":\"1차\",\"name\":\"민법(계약)\",\"count\":\"25문항\",\"time\":\"25분\"},{\"round\":\"1차\",\"name\":\"행정법\",\"count\":\"25문항\",\"time\":\"25분\"},{\"round\":\"2차\",\"name\":\"민법(총칙·물권)\",\"count\":\"4문항(논술)\",\"time\":\"150분\"},{\"round\":\"2차\",\"name\":\"행정절차론\",\"count\":\"4문항(논술)\",\"time\":\"150분\"},{\"round\":\"2차\",\"name\":\"사무관리론\",\"count\":\"4문항(논술)\",\"time\":\"150분\"}]",
+  "exam_fee": "1차 20,000원 / 2차 33,000원",
+  "written_reg_start": "2026.04.13", "written_reg_end": "2026.04.17",
+  "written_exam_date": "2026.05.30 (1차)", "written_result_date": "2026.07.01 (1차)",
+  "practical_reg_start": "2026.07.27", "practical_reg_end": "2026.07.31",
+  "practical_exam_date": "2026.10.03 (2차)", "practical_result_date": "2026.12.06 (최종)",
+  "notes": "• 1차·2차 각 과목 40점 이상 + 평균 60점 이상\n• 실무수습(6개월) 후 행정사 자격 취득\n• 자격 취득 후 즉시 사무소 개업 가능",
+  "source_url": "https://www.q-net.or.kr", "data_source": "manual"
+}]

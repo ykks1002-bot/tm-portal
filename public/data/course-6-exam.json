@@ -1,0 +1,10 @@
+[{
+  "id": 6, "course_id": 6, "year": 2026, "round_label": "제28회",
+  "organizer": "경찰청",
+  "subjects_json": "[{\"round\":\"1차\",\"name\":\"법학개론\",\"count\":\"25문항\",\"time\":\"교시별 40분\"},{\"round\":\"1차\",\"name\":\"민간경비론\",\"count\":\"25문항\",\"time\":\"교시별 40분\"},{\"round\":\"2차(일반)\",\"name\":\"경비업법\",\"count\":\"30문항\",\"time\":\"교시별 40분\"},{\"round\":\"2차(일반)\",\"name\":\"소방학\",\"count\":\"30문항\",\"time\":\"교시별 40분\"},{\"round\":\"2차(일반)\",\"name\":\"범죄학\",\"count\":\"30문항\",\"time\":\"교시별 40분\"}]",
+  "exam_fee": "1차 18,000원 / 2차 18,000원",
+  "written_reg_start": "2026.09.14", "written_reg_end": "2026.09.18",
+  "written_exam_date": "2026.11.21 (1·2차 동시)", "written_result_date": "2026.12.31",
+  "notes": "• 1·2차 동시 시행\n• 각 과목 40점 이상 + 평균 60점 이상\n• 시험 후 신임교육(88시간) 이수 필수",
+  "source_url": "https://www.q-net.or.kr", "data_source": "manual"
+}]

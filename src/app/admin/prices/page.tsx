@@ -19,19 +19,34 @@ function staleDays(iso: string | null): number {
 // ── 가격 행 편집 컴포넌트 ─────────────────────────────────────────────────────
 
 function PriceRowItem({ row, onSaved }: { row: PriceRow; onSaved: () => void }) {
+  const isEduwill = row.competitor_id === null;
   const [editing, setEditing] = useState(false);
   const [val, setVal] = useState(row.value_text);
+  const [priceVal, setPriceVal] = useState(row.item_description);
   const [saving, setSaving] = useState(false);
   const days = staleDays(row.updated_at);
+
+  const cancel = () => {
+    setVal(row.value_text);
+    setPriceVal(row.item_description);
+    setEditing(false);
+  };
 
   const save = async () => {
     setSaving(true);
     try {
-      await api.upsertComparisonValue({
-        comparison_item_id: row.item_id,
-        competitor_id: row.competitor_id,
-        value_text: val,
-      });
+      if (isEduwill) {
+        await Promise.all([
+          api.updateComparisonItem(row.item_id, { description: priceVal }),
+          api.upsertComparisonValue({ comparison_item_id: row.item_id, competitor_id: null, value_text: val }),
+        ]);
+      } else {
+        await api.upsertComparisonValue({
+          comparison_item_id: row.item_id,
+          competitor_id: row.competitor_id,
+          value_text: val,
+        });
+      }
       setEditing(false);
       onSaved();
     } finally {
@@ -55,20 +70,37 @@ function PriceRowItem({ row, onSaved }: { row: PriceRow; onSaved: () => void }) 
       <td className="px-3 py-2.5" style={{ minWidth: 280 }}>
         {editing ? (
           <div className="flex gap-2">
-            <textarea
-              value={val}
-              onChange={e => setVal(e.target.value)}
-              rows={val.split("\n").length + 1}
-              className="flex-1 text-xs px-2 py-1.5 rounded-lg outline-none resize-y"
-              style={{ border: "1.5px solid var(--accent)", background: "var(--surface2)", color: "var(--text)", fontFamily: "monospace" }}
-            />
+            <div className="flex-1 flex flex-col gap-1.5">
+              {isEduwill && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs shrink-0" style={{ color: "var(--text-muted)", width: 28 }}>가격</span>
+                  <input
+                    value={priceVal}
+                    onChange={e => setPriceVal(e.target.value)}
+                    placeholder="예: 529,000원"
+                    className="flex-1 text-xs px-2 py-1.5 rounded-lg outline-none"
+                    style={{ border: "1.5px solid var(--accent)", background: "var(--surface2)", color: "var(--text)" }}
+                  />
+                </div>
+              )}
+              <div className={isEduwill ? "flex items-start gap-2" : ""}>
+                {isEduwill && <span className="text-xs shrink-0 mt-1.5" style={{ color: "var(--text-muted)", width: 28 }}>내용</span>}
+                <textarea
+                  value={val}
+                  onChange={e => setVal(e.target.value)}
+                  rows={Math.max(3, val.split("\n").length + 1)}
+                  className="flex-1 w-full text-xs px-2 py-1.5 rounded-lg outline-none resize-y"
+                  style={{ border: "1.5px solid var(--accent)", background: "var(--surface2)", color: "var(--text)", fontFamily: "monospace" }}
+                />
+              </div>
+            </div>
             <div className="flex flex-col gap-1.5 shrink-0">
               <button onClick={save} disabled={saving}
                       className="text-xs px-3 py-1.5 rounded-lg font-bold disabled:opacity-50"
                       style={{ background: "var(--accent)", color: "white" }}>
                 {saving ? "…" : "저장"}
               </button>
-              <button onClick={() => { setVal(row.value_text); setEditing(false); }}
+              <button onClick={cancel}
                       className="text-xs px-3 py-1.5 rounded-lg"
                       style={{ background: "var(--surface2)", color: "var(--text-muted)", border: "1px solid var(--border)" }}>
                 취소
@@ -77,10 +109,15 @@ function PriceRowItem({ row, onSaved }: { row: PriceRow; onSaved: () => void }) 
           </div>
         ) : (
           <div className="flex items-start gap-2">
-            <pre className="flex-1 text-xs whitespace-pre-wrap leading-relaxed font-sans"
-                 style={{ color: "var(--text)", maxHeight: 80, overflow: "hidden" }}>
-              {val || <span style={{ color: "var(--text-muted)", fontStyle: "italic" }}>비어 있음</span>}
-            </pre>
+            <div className="flex-1 min-w-0">
+              {isEduwill && priceVal && (
+                <div className="text-xs font-semibold mb-1" style={{ color: "var(--accent)" }}>{priceVal}</div>
+              )}
+              <pre className="text-xs whitespace-pre-wrap leading-relaxed font-sans"
+                   style={{ color: "var(--text)", maxHeight: 72, overflow: "hidden" }}>
+                {val || <span style={{ color: "var(--text-muted)", fontStyle: "italic" }}>비어 있음</span>}
+              </pre>
+            </div>
             <button onClick={() => setEditing(true)}
                     className="shrink-0 text-xs px-2.5 py-1 rounded-lg transition"
                     style={{ background: "rgba(79,127,255,0.1)", color: "var(--accent)", border: "1px solid rgba(79,127,255,0.25)" }}>

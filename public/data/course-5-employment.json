@@ -1,0 +1,9 @@
+{
+  "id": 5, "course_id": 5,
+  "worker_count": "—",
+  "avg_wage": "—",
+  "employment_outlook": "유지",
+  "outlook_detail": "학력 보완 목적의 시험. 고졸 학력 취득 후 전문대·4년제 진학, 공무원 응시, 취업 등에 폭넓게 활용 가능.",
+  "talking_points_json": "[\"고졸 학력 취득 → 공무원·대기업 지원 자격 요건 충족\",\"연 2회 시험 — 비교적 단기간 합격 가능\",\"응시료 무료, 접근 장벽 낮음\",\"학력 취득 후 대학 진학 시 편입·정시·수시 모두 가능\"]",
+  "stat_year": "2024", "data_source": "한국교육과정평가원", "source_url": "https://www.kice.re.kr"
+}
