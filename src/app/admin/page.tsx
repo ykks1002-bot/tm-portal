@@ -268,6 +268,7 @@ export default function AdminPage() {
     const hubItems = [
       { icon: "📅", label: "시험 정보 / 취업 전망", desc: "시험 일정·접수일·과목·취업 전망 편집", href: "/admin/exam-info" },
       { icon: "📚", label: "과목 관리",              desc: "과목 정보·강점·스크립트·FAQ 편집",   href: "/admin/courses" },
+      { icon: "💰", label: "가격 관리",              desc: "경쟁사 수강료 직접 수정",             href: "/admin/prices" },
     ];
     return (
       <div className="min-h-screen" style={{ background: "var(--bg)" }}>
