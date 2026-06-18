@@ -368,10 +368,14 @@ function ExamScheduleCard({ s }: { s: ExamSchedule }) {
                           </td>
                         )}
                         <td style={{ padding: "10px 14px", color: "var(--text)", borderRight: "1px solid #C7D2E8", fontWeight: 500 }}>{row.name}</td>
-                        <td style={{ padding: "10px 14px", textAlign: "center", fontWeight: 700,
-                                     background: colBg, color: colColor, whiteSpace: "nowrap" }}>
-                          {row.val}
-                        </td>
+                        {(active !== "시험시간" || row.isFirst) && (
+                          <td rowSpan={active === "시험시간" ? row.span : 1}
+                              style={{ padding: "10px 14px", textAlign: "center", fontWeight: 700,
+                                       background: colBg, color: colColor, whiteSpace: "nowrap",
+                                       verticalAlign: "middle" }}>
+                            {row.val}
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>
