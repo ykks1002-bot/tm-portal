@@ -250,6 +250,18 @@ const EXAM_TABS = [
 ] as const;
 type ExamTab = typeof EXAM_TABS[number]["key"];
 
+function mergeRegDates(start: string, end: string): string {
+  if (start.includes("회:") && end.includes("회:")) {
+    const startParts = start.split(" / ");
+    const endParts = end.split(" / ");
+    return startParts.map((s, i) => {
+      const endDate = endParts[i]?.replace(/^\d+회:\s*/, "").trim() ?? "";
+      return `${s} ~ ${endDate}`;
+    }).join(" / ");
+  }
+  return `${start} ~ ${end}`;
+}
+
 function ExamScheduleCard({ s }: { s: ExamSchedule }) {
   const [active, setActive] = useState<ExamTab | null>("시험일정");
   const subjects: { round: string; name: string; count: string; time: string }[] =
@@ -324,7 +336,7 @@ function ExamScheduleCard({ s }: { s: ExamSchedule }) {
                     {row.label}
                   </span>
                   <span className="font-medium text-xs" style={{ color: "var(--text)" }}>
-                    {row.date ?? `${row.start} ~ ${row.end}`}
+                    {row.date ?? mergeRegDates(row.start!, row.end!)}
                   </span>
                 </div>
               )) : <EmptyState message="시험 일정 정보가 없습니다." />}
