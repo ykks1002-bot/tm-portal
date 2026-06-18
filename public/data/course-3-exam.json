@@ -17,6 +17,7 @@
     "practical_result_date": "2026.12.16 (최종)",
     "notes": "• 1차·2차 각 과목 40점 이상 + 평균 60점 이상\n• 실무수습(6개월) 후 행정사 자격 취득\n• 자격 취득 후 즉시 사무소 개업 가능",
     "source_url": "https://www.q-net.or.kr",
-    "data_source": "manual"
+    "data_source": "manual",
+    "pass_rates_json": "[{\"year\": \"2025\", \"round\": \"1차\", \"applicants\": \"12,541명\", \"passed\": \"3,408명\", \"rate\": \"27.2%\"}, {\"year\": \"2025\", \"round\": \"2차\", \"applicants\": \"9,342명\", \"passed\": \"1,682명\", \"rate\": \"18.0%\"}, {\"year\": \"2024\", \"round\": \"1차\", \"applicants\": \"12,974명\", \"passed\": \"3,757명\", \"rate\": \"29.0%\"}, {\"year\": \"2024\", \"round\": \"2차\", \"applicants\": \"9,617명\", \"passed\": \"2,026명\", \"rate\": \"21.1%\"}]"
   }
 ]

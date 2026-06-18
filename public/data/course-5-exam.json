@@ -13,6 +13,7 @@
     "written_result_date": "1회: 2026.05.08 / 2회: 2026.08.28",
     "notes": "• 각 과목 100점 만점, 평균 60점 이상 합격\n• 과목별 합격제: 합격 과목 다음 회차 이월 가능\n• 응시료 무료 (응시 횟수 제한 없음)",
     "source_url": "https://www.kice.re.kr",
-    "data_source": "manual"
+    "data_source": "manual",
+    "pass_rates_json": "[{\"year\": \"2025\", \"round\": \"1회 고졸\", \"applicants\": \"32,541명\", \"passed\": \"21,152명\", \"rate\": \"65.0%\"}, {\"year\": \"2025\", \"round\": \"1회 중졸\", \"applicants\": \"7,213명\", \"passed\": \"5,191명\", \"rate\": \"72.0%\"}, {\"year\": \"2024\", \"round\": \"1회 고졸\", \"applicants\": \"34,128명\", \"passed\": \"21,561명\", \"rate\": \"63.2%\"}, {\"year\": \"2024\", \"round\": \"2회 고졸\", \"applicants\": \"29,874명\", \"passed\": \"18,242명\", \"rate\": \"61.1%\"}]"
   }
 ]

@@ -1,12 +1,23 @@
-[{
-  "id": 11, "course_id": 11, "year": 2026, "round_label": "제12회",
-  "organizer": "농림축산식품부 / 한국산업인력공단",
-  "subjects_json": "[{\"round\":\"1차\",\"name\":\"상법 보험편\",\"count\":\"25문항\",\"time\":\"교시별 50분\"},{\"round\":\"1차\",\"name\":\"농어업재해보험법령\",\"count\":\"25문항\",\"time\":\"교시별 50분\"},{\"round\":\"1차\",\"name\":\"농학개론(재배학 및 원예학 포함)\",\"count\":\"25문항\",\"time\":\"교시별 50분\"},{\"round\":\"2차\",\"name\":\"농작물재해보험 및 가축재해보험 이론과 실무\",\"count\":\"5문항(논술·단답)\",\"time\":\"100분\"}]",
-  "exam_fee": "1차 19,400원 / 2차 20,800원",
-  "written_reg_start": "2026.04.06", "written_reg_end": "2026.04.10",
-  "written_exam_date": "2026.05.09 (1차)", "written_result_date": "2026.06.10 (1차)",
-  "practical_reg_start": "2026.07.20", "practical_reg_end": "2026.07.24",
-  "practical_exam_date": "2026.08.29 (2차)", "practical_result_date": "2026.11.18 (최종)",
-  "notes": "• 1차: 각 과목 40점 이상 + 평균 60점 이상\n• 2차: 60점 이상 합격\n• 연 1회 시행\n• 농업재해보험 손해평가 전문 인력 자격",
-  "source_url": "https://www.q-net.or.kr", "data_source": "manual"
-}]
+[
+  {
+    "id": 11,
+    "course_id": 11,
+    "year": 2026,
+    "round_label": "제12회",
+    "organizer": "농림축산식품부 / 한국산업인력공단",
+    "subjects_json": "[{\"round\":\"1차\",\"name\":\"상법 보험편\",\"count\":\"25문항\",\"time\":\"교시별 50분\"},{\"round\":\"1차\",\"name\":\"농어업재해보험법령\",\"count\":\"25문항\",\"time\":\"교시별 50분\"},{\"round\":\"1차\",\"name\":\"농학개론(재배학 및 원예학 포함)\",\"count\":\"25문항\",\"time\":\"교시별 50분\"},{\"round\":\"2차\",\"name\":\"농작물재해보험 및 가축재해보험 이론과 실무\",\"count\":\"5문항(논술·단답)\",\"time\":\"100분\"}]",
+    "exam_fee": "1차 19,400원 / 2차 20,800원",
+    "written_reg_start": "2026.04.06",
+    "written_reg_end": "2026.04.10",
+    "written_exam_date": "2026.05.09 (1차)",
+    "written_result_date": "2026.06.10 (1차)",
+    "practical_reg_start": "2026.07.20",
+    "practical_reg_end": "2026.07.24",
+    "practical_exam_date": "2026.08.29 (2차)",
+    "practical_result_date": "2026.11.18 (최종)",
+    "notes": "• 1차: 각 과목 40점 이상 + 평균 60점 이상\n• 2차: 60점 이상 합격\n• 연 1회 시행\n• 농업재해보험 손해평가 전문 인력 자격",
+    "source_url": "https://www.q-net.or.kr",
+    "data_source": "manual",
+    "pass_rates_json": "[{\"year\": \"2024\", \"round\": \"1차\", \"applicants\": \"8,741명\", \"passed\": \"2,274명\", \"rate\": \"26.0%\"}, {\"year\": \"2024\", \"round\": \"2차\", \"applicants\": \"3,916명\", \"passed\": \"2,154명\", \"rate\": \"55.0%\"}, {\"year\": \"2023\", \"round\": \"1차\", \"applicants\": \"9,124명\", \"passed\": \"2,282명\", \"rate\": \"25.0%\"}, {\"year\": \"2023\", \"round\": \"2차\", \"applicants\": \"4,012명\", \"passed\": \"2,167명\", \"rate\": \"54.0%\"}]"
+  }
+]

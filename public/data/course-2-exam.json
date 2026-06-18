@@ -1,12 +1,23 @@
-[{
-  "id": 2, "course_id": 2, "year": 2026, "round_label": "제29회",
-  "organizer": "한국산업인력공단",
-  "subjects_json": "[{\"round\":\"1차\",\"name\":\"회계원리\",\"count\":\"25문항\",\"time\":\"교시별 50분\"},{\"round\":\"1차\",\"name\":\"공동주택시설개론\",\"count\":\"25문항\",\"time\":\"교시별 50분\"},{\"round\":\"1차\",\"name\":\"민법\",\"count\":\"25문항\",\"time\":\"교시별 50분\"},{\"round\":\"2차\",\"name\":\"주택관리관계법규\",\"count\":\"40문항\",\"time\":\"50분\"},{\"round\":\"2차\",\"name\":\"공동주택관리실무\",\"count\":\"40문항\",\"time\":\"50분\"}]",
-  "exam_fee": "1차 19,400원 / 2차 19,400원",
-  "written_reg_start": "2026.05.11", "written_reg_end": "2026.05.15",
-  "written_exam_date": "2026.06.27 (1차)", "written_result_date": "2026.07.29 (1차)",
-  "practical_reg_start": "2026.08.10", "practical_reg_end": "2026.08.14",
-  "practical_exam_date": "2026.09.19 (2차)", "practical_result_date": "2026.12.02 (최종)",
-  "notes": "• 신분증 필참\n• 1차·2차 모두 각 과목 40점 이상 + 평균 60점 이상\n• 최종 합격 후 시·도지사 자격증 발급",
-  "source_url": "https://www.q-net.or.kr", "data_source": "manual"
-}]
+[
+  {
+    "id": 2,
+    "course_id": 2,
+    "year": 2026,
+    "round_label": "제29회",
+    "organizer": "한국산업인력공단",
+    "subjects_json": "[{\"round\":\"1차\",\"name\":\"회계원리\",\"count\":\"25문항\",\"time\":\"교시별 50분\"},{\"round\":\"1차\",\"name\":\"공동주택시설개론\",\"count\":\"25문항\",\"time\":\"교시별 50분\"},{\"round\":\"1차\",\"name\":\"민법\",\"count\":\"25문항\",\"time\":\"교시별 50분\"},{\"round\":\"2차\",\"name\":\"주택관리관계법규\",\"count\":\"40문항\",\"time\":\"50분\"},{\"round\":\"2차\",\"name\":\"공동주택관리실무\",\"count\":\"40문항\",\"time\":\"50분\"}]",
+    "exam_fee": "1차 19,400원 / 2차 19,400원",
+    "written_reg_start": "2026.05.11",
+    "written_reg_end": "2026.05.15",
+    "written_exam_date": "2026.06.27 (1차)",
+    "written_result_date": "2026.07.29 (1차)",
+    "practical_reg_start": "2026.08.10",
+    "practical_reg_end": "2026.08.14",
+    "practical_exam_date": "2026.09.19 (2차)",
+    "practical_result_date": "2026.12.02 (최종)",
+    "notes": "• 신분증 필참\n• 1차·2차 모두 각 과목 40점 이상 + 평균 60점 이상\n• 최종 합격 후 시·도지사 자격증 발급",
+    "source_url": "https://www.q-net.or.kr",
+    "data_source": "manual",
+    "pass_rates_json": "[{\"year\": \"2024\", \"round\": \"1차\", \"applicants\": \"22,174명\", \"passed\": \"3,326명\", \"rate\": \"15.0%\"}, {\"year\": \"2024\", \"round\": \"2차\", \"applicants\": \"10,847명\", \"passed\": \"3,972명\", \"rate\": \"36.6%\"}, {\"year\": \"2023\", \"round\": \"1차\", \"applicants\": \"23,081명\", \"passed\": \"3,001명\", \"rate\": \"13.0%\"}, {\"year\": \"2023\", \"round\": \"2차\", \"applicants\": \"10,231명\", \"passed\": \"3,172명\", \"rate\": \"31.0%\"}]"
+  }
+]

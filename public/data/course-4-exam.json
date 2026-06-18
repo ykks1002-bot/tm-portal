@@ -1,10 +1,19 @@
-[{
-  "id": 4, "course_id": 4, "year": 2027, "round_label": "제25회",
-  "organizer": "한국사회복지사협회",
-  "subjects_json": "[{\"round\":\"1교시\",\"name\":\"사회복지기초(인간행동과사회환경, 사회복지조사론)\",\"count\":\"50문항\",\"time\":\"50분\"},{\"round\":\"2교시\",\"name\":\"사회복지실천(사회복지실천론, 실천기술론, 지역사회복지론)\",\"count\":\"75문항\",\"time\":\"75분\"},{\"round\":\"3교시\",\"name\":\"사회복지정책과제도(정책론, 행정론, 법제론)\",\"count\":\"75문항\",\"time\":\"75분\"}]",
-  "exam_fee": "22,000원",
-  "written_reg_start": "2026.12.07 (예정)", "written_reg_end": "2026.12.11 (예정)",
-  "written_exam_date": "2027.01.09 (예정)", "written_result_date": "2027.03 (예정)",
-  "notes": "• 각 교시 40점 이상 + 전 과목 평균 60점 이상\n• 응시자격: 사회복지학과 졸업 또는 2급 취득 후 실무경력 1년 이상\n• 연 1회 시행",
-  "source_url": "https://www.welfare.net", "data_source": "manual"
-}]
+[
+  {
+    "id": 4,
+    "course_id": 4,
+    "year": 2027,
+    "round_label": "제25회",
+    "organizer": "한국사회복지사협회",
+    "subjects_json": "[{\"round\":\"1교시\",\"name\":\"사회복지기초(인간행동과사회환경, 사회복지조사론)\",\"count\":\"50문항\",\"time\":\"50분\"},{\"round\":\"2교시\",\"name\":\"사회복지실천(사회복지실천론, 실천기술론, 지역사회복지론)\",\"count\":\"75문항\",\"time\":\"75분\"},{\"round\":\"3교시\",\"name\":\"사회복지정책과제도(정책론, 행정론, 법제론)\",\"count\":\"75문항\",\"time\":\"75분\"}]",
+    "exam_fee": "22,000원",
+    "written_reg_start": "2026.12.07 (예정)",
+    "written_reg_end": "2026.12.11 (예정)",
+    "written_exam_date": "2027.01.09 (예정)",
+    "written_result_date": "2027.03 (예정)",
+    "notes": "• 각 교시 40점 이상 + 전 과목 평균 60점 이상\n• 응시자격: 사회복지학과 졸업 또는 2급 취득 후 실무경력 1년 이상\n• 연 1회 시행",
+    "source_url": "https://www.welfare.net",
+    "data_source": "manual",
+    "pass_rates_json": "[{\"year\": \"2024\", \"round\": \"-\", \"applicants\": \"27,893명\", \"passed\": \"11,068명\", \"rate\": \"39.7%\"}, {\"year\": \"2023\", \"round\": \"-\", \"applicants\": \"29,214명\", \"passed\": \"13,501명\", \"rate\": \"46.2%\"}, {\"year\": \"2022\", \"round\": \"-\", \"applicants\": \"28,947명\", \"passed\": \"13,072명\", \"rate\": \"45.2%\"}]"
+  }
+]

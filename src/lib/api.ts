@@ -265,6 +265,7 @@ export interface ExamSchedule {
   practical_exam_date?: string; practical_result_date?: string;
   notes?: string; organizer?: string;
   source_url?: string; data_source?: string;
+  pass_rates_json?: string;
   updated_at?: string | null;
 }
 export interface EmploymentStat {

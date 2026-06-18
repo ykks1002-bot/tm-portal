@@ -17,6 +17,7 @@
     "practical_reg_start": null,
     "practical_reg_end": null,
     "practical_exam_date": "2026.05.19 ~ 05.21 (면접)",
-    "practical_result_date": "2026.06.12 (최종합격)"
+    "practical_result_date": "2026.06.12 (최종합격)",
+    "pass_rates_json": "[{\"year\": \"2026\", \"round\": \"최종합격\", \"applicants\": \"미발표\", \"passed\": \"미발표\", \"rate\": \"(예정)\"}, {\"year\": \"2024\", \"round\": \"최종합격\", \"applicants\": \"4,873명\", \"passed\": \"127명\", \"rate\": \"2.6%\"}, {\"year\": \"2022\", \"round\": \"최종합격\", \"applicants\": \"4,231명\", \"passed\": \"108명\", \"rate\": \"2.6%\"}]"
   }
 ]

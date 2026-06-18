@@ -330,68 +330,112 @@ function ExamScheduleCard({ s }: { s: ExamSchedule }) {
               )) : <EmptyState message="시험 일정 정보가 없습니다." />}
             </div>
           )}
-          {active === "시험과목" && (
-            <div className="space-y-3">
-              {rounds.length > 0 ? rounds.map(round => (
-                <div key={round}>
-                  <div className="text-xs font-bold mb-1.5 px-2 py-0.5 rounded inline-block"
-                       style={{ background: "rgba(0,45,105,0.08)", color: "var(--eduwill-navy)" }}>
-                    {round}
-                  </div>
-                  <div className="space-y-1">
-                    {subjects.filter(x => x.round === round).map((subj, si) => (
-                      <div key={si} className="flex items-center justify-between text-xs gap-2 px-3 py-2 rounded-lg"
-                           style={{ background: "var(--surface2)" }}>
-                        <span style={{ color: "var(--text)" }}>{subj.name}</span>
-                        {subj.count && (
-                          <span className="shrink-0 px-2 py-0.5 rounded font-medium"
-                                style={{ background: "rgba(79,127,255,0.1)", color: "var(--accent)" }}>
-                            {subj.count}
-                          </span>
+          {(active === "시험과목" || active === "시험시간") && (() => {
+            const colLabel = active === "시험과목" ? "문항수" : "시험시간";
+            const colKey   = active === "시험과목" ? "count" : "time";
+            const colBg    = active === "시험과목" ? "rgba(79,127,255,0.08)" : "rgba(0,0,0,0.04)";
+            const colColor = active === "시험과목" ? "var(--accent)" : "var(--text-muted)";
+            if (!subjects.length) return <EmptyState message={`${colLabel} 정보가 없습니다.`} />;
+            const rows = rounds.flatMap(r => {
+              const grp = subjects.filter(x => x.round === r);
+              return grp.map((subj, idx) => ({ isFirst: idx === 0, span: grp.length, round: r, name: subj.name, val: (subj as Record<string, string>)[colKey] || "-" }));
+            });
+            return (
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
+                  <thead>
+                    <tr style={{ background: "var(--eduwill-navy)", color: "white" }}>
+                      <th style={{ padding: "8px 12px", textAlign: "center", fontWeight: 600, width: "80px", whiteSpace: "nowrap" }}>구분</th>
+                      <th style={{ padding: "8px 12px", textAlign: "left",   fontWeight: 600 }}>과목명</th>
+                      <th style={{ padding: "8px 12px", textAlign: "center", fontWeight: 600, width: "90px", whiteSpace: "nowrap" }}>{colLabel}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((row, i) => (
+                      <tr key={i} style={{ borderBottom: "1px solid var(--border)", background: i % 2 === 0 ? "var(--surface2)" : "transparent" }}>
+                        {row.isFirst && (
+                          <td rowSpan={row.span}
+                              style={{ padding: "8px 12px", textAlign: "center", fontWeight: 700, verticalAlign: "middle",
+                                       background: "rgba(0,45,105,0.07)", color: "var(--eduwill-navy)",
+                                       borderRight: "2px solid var(--eduwill-navy)", whiteSpace: "nowrap" }}>
+                            {row.round}
+                          </td>
                         )}
-                      </div>
+                        <td style={{ padding: "8px 12px", color: "var(--text)" }}>{row.name}</td>
+                        <td style={{ padding: "8px 12px", textAlign: "center", fontWeight: 600,
+                                     background: colBg, color: colColor, whiteSpace: "nowrap" }}>
+                          {row.val}
+                        </td>
+                      </tr>
                     ))}
-                  </div>
+                  </tbody>
+                </table>
+              </div>
+            );
+          })()}
+          {active === "합격률" && (() => {
+            type PassRate = { year: string; round: string; applicants: string; passed: string; rate: string };
+            const passRates: PassRate[] = s.pass_rates_json ? JSON.parse(s.pass_rates_json) : [];
+            if (!passRates.length) return (
+              <div className="rounded-xl p-4 text-center"
+                   style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
+                <p className="text-sm py-2" style={{ color: "var(--text-muted)" }}>합격률 데이터 업데이트 예정입니다.</p>
+              </div>
+            );
+            const years = Array.from(new Set(passRates.map(r => r.year)));
+            const rateColor = (rate: string) => {
+              const n = parseFloat(rate);
+              if (isNaN(n)) return "var(--text-muted)";
+              if (n >= 50) return "#16a34a";
+              if (n >= 25) return "#2563eb";
+              if (n >= 10) return "#d97706";
+              return "#dc2626";
+            };
+            return (
+              <div>
+                <div style={{ overflowX: "auto" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
+                    <thead>
+                      <tr style={{ background: "var(--eduwill-navy)", color: "white" }}>
+                        <th style={{ padding: "8px 12px", textAlign: "center", fontWeight: 600, width: "64px" }}>연도</th>
+                        <th style={{ padding: "8px 12px", textAlign: "center", fontWeight: 600, width: "90px", whiteSpace: "nowrap" }}>구분</th>
+                        <th style={{ padding: "8px 12px", textAlign: "right",  fontWeight: 600 }}>응시인원</th>
+                        <th style={{ padding: "8px 12px", textAlign: "right",  fontWeight: 600 }}>합격인원</th>
+                        <th style={{ padding: "8px 12px", textAlign: "center", fontWeight: 600, width: "72px" }}>합격률</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {years.flatMap((yr, yi) => {
+                        const grp = passRates.filter(r => r.year === yr);
+                        return grp.map((pr, pi) => (
+                          <tr key={`${yi}-${pi}`}
+                              style={{ borderBottom: "1px solid var(--border)", background: (yi % 2 === 0) ? "var(--surface2)" : "transparent" }}>
+                            {pi === 0 && (
+                              <td rowSpan={grp.length}
+                                  style={{ padding: "8px 12px", textAlign: "center", fontWeight: 700, verticalAlign: "middle",
+                                           background: "rgba(0,45,105,0.07)", color: "var(--eduwill-navy)",
+                                           borderRight: "2px solid var(--eduwill-navy)" }}>
+                                {pr.year}
+                              </td>
+                            )}
+                            <td style={{ padding: "8px 12px", textAlign: "center", color: "var(--text-muted)", whiteSpace: "nowrap" }}>{pr.round}</td>
+                            <td style={{ padding: "8px 12px", textAlign: "right", color: "var(--text)" }}>{pr.applicants}</td>
+                            <td style={{ padding: "8px 12px", textAlign: "right", color: "var(--text)" }}>{pr.passed}</td>
+                            <td style={{ padding: "8px 12px", textAlign: "center", fontWeight: 700, color: rateColor(pr.rate) }}>
+                              {pr.rate}
+                            </td>
+                          </tr>
+                        ));
+                      })}
+                    </tbody>
+                  </table>
                 </div>
-              )) : <EmptyState message="시험과목 정보가 없습니다." />}
-            </div>
-          )}
-          {active === "시험시간" && (
-            <div className="space-y-3">
-              {rounds.length > 0 ? rounds.map(round => (
-                <div key={round}>
-                  <div className="text-xs font-bold mb-1.5 px-2 py-0.5 rounded inline-block"
-                       style={{ background: "rgba(0,45,105,0.08)", color: "var(--eduwill-navy)" }}>
-                    {round}
-                  </div>
-                  <div className="space-y-1">
-                    {subjects.filter(x => x.round === round).map((subj, si) => (
-                      <div key={si} className="flex items-center justify-between text-xs gap-2 px-3 py-2 rounded-lg"
-                           style={{ background: "var(--surface2)" }}>
-                        <span style={{ color: "var(--text)" }}>{subj.name}</span>
-                        {subj.time ? (
-                          <span className="shrink-0 px-2 py-0.5 rounded"
-                                style={{ background: "rgba(0,0,0,0.05)", color: "var(--text-muted)" }}>
-                            {subj.time}
-                          </span>
-                        ) : (
-                          <span className="shrink-0 text-xs" style={{ color: "var(--text-muted)" }}>-</span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )) : <EmptyState message="시험시간 정보가 없습니다." />}
-            </div>
-          )}
-          {active === "합격률" && (
-            <div className="rounded-xl p-4 text-center"
-                 style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
-              <p className="text-sm py-2" style={{ color: "var(--text-muted)" }}>
-                합격률 데이터 업데이트 예정입니다.
-              </p>
-            </div>
-          )}
+                <p className="text-xs mt-2 px-1" style={{ color: "var(--text-muted)" }}>
+                  ※ 출처: 큐넷·검정기관 공식 발표 기준 (근사치 포함)
+                </p>
+              </div>
+            );
+          })()}
           {active === "유의사항" && (
             s.notes ? (
               <div className="rounded-xl p-4"
