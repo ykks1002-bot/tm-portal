@@ -266,6 +266,7 @@ export interface ExamSchedule {
   notes?: string; organizer?: string;
   source_url?: string; data_source?: string;
   pass_rates_json?: string;
+  cutoff_json?: string;
   updated_at?: string | null;
 }
 export interface EmploymentStat {

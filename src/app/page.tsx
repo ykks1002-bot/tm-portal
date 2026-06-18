@@ -374,6 +374,62 @@ function ExamScheduleCard({ s }: { s: ExamSchedule }) {
             );
           })()}
           {active === "합격률" && (() => {
+            // ── 계리직공무원: 합격선 매트릭스 표 ──
+            if (s.cutoff_json) {
+              type CutoffData = { label: string; years: string[]; rows: { region: string; scores: string[]; avg: string }[] };
+              const cd: CutoffData = JSON.parse(s.cutoff_json);
+              const scoreColor = (v: string) => {
+                const n = parseFloat(v); if (isNaN(n)) return "var(--text)";
+                if (n >= 80) return "#dc2626"; if (n >= 70) return "#d97706"; return "#2563eb";
+              };
+              return (
+                <div>
+                  <div style={{ overflowX: "auto" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "11px" }}>
+                      <thead>
+                        <tr style={{ background: "var(--eduwill-navy)", color: "white" }}>
+                          <th style={{ padding: "7px 10px", textAlign: "left", fontWeight: 600, whiteSpace: "nowrap" }}>우정청</th>
+                          {cd.years.map(y => (
+                            <th key={y} style={{ padding: "7px 8px", textAlign: "center", fontWeight: 600, whiteSpace: "nowrap" }}>{y}</th>
+                          ))}
+                          <th style={{ padding: "7px 8px", textAlign: "center", fontWeight: 600, whiteSpace: "nowrap", background: "rgba(255,255,255,0.15)" }}>평균</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {cd.rows.map((row, i) => {
+                          const isAvgRow = row.region === "(연도)평균";
+                          return (
+                            <tr key={i} style={{
+                              borderBottom: "1px solid var(--border)",
+                              background: isAvgRow ? "rgba(0,45,105,0.07)" : i % 2 === 0 ? "var(--surface2)" : "transparent",
+                              fontWeight: isAvgRow ? 700 : 400,
+                            }}>
+                              <td style={{ padding: "7px 10px", color: isAvgRow ? "var(--eduwill-navy)" : "var(--text-muted)", whiteSpace: "nowrap", borderRight: "2px solid var(--eduwill-navy)" }}>
+                                {row.region}
+                              </td>
+                              {row.scores.map((sc, si) => (
+                                <td key={si} style={{ padding: "7px 8px", textAlign: "center", fontWeight: 600, color: scoreColor(sc) }}>
+                                  {sc}
+                                </td>
+                              ))}
+                              <td style={{ padding: "7px 8px", textAlign: "center", fontWeight: 700, color: isAvgRow ? "var(--text-muted)" : scoreColor(row.avg), background: "rgba(0,45,105,0.04)" }}>
+                                {row.avg}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  <p className="text-xs mt-2 px-1" style={{ color: "var(--text-muted)" }}>
+                    ※ {cd.label} | 출처: 우정사업본부 공식 발표 기준<br/>
+                    색상 기준: <span style={{ color: "#dc2626", fontWeight: 600 }}>80점 이상</span> / <span style={{ color: "#d97706", fontWeight: 600 }}>70점 이상</span> / <span style={{ color: "#2563eb", fontWeight: 600 }}>70점 미만</span>
+                  </p>
+                </div>
+              );
+            }
+
+            // ── 일반 합격률 표 ──
             type PassRate = { year: string; round: string; applicants: string; passed: string; rate: string };
             const passRates: PassRate[] = s.pass_rates_json ? JSON.parse(s.pass_rates_json) : [];
             if (!passRates.length) return (
@@ -397,8 +453,8 @@ function ExamScheduleCard({ s }: { s: ExamSchedule }) {
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
                     <thead>
                       <tr style={{ background: "var(--eduwill-navy)", color: "white" }}>
-                        <th style={{ padding: "8px 12px", textAlign: "center", fontWeight: 600, width: "64px" }}>연도</th>
-                        <th style={{ padding: "8px 12px", textAlign: "center", fontWeight: 600, width: "90px", whiteSpace: "nowrap" }}>구분</th>
+                        <th style={{ padding: "8px 12px", textAlign: "center", fontWeight: 600, width: "100px" }}>연도</th>
+                        <th style={{ padding: "8px 12px", textAlign: "center", fontWeight: 600, width: "72px", whiteSpace: "nowrap" }}>구분</th>
                         <th style={{ padding: "8px 12px", textAlign: "right",  fontWeight: 600 }}>응시인원</th>
                         <th style={{ padding: "8px 12px", textAlign: "right",  fontWeight: 600 }}>합격인원</th>
                         <th style={{ padding: "8px 12px", textAlign: "center", fontWeight: 600, width: "72px" }}>합격률</th>
@@ -414,7 +470,7 @@ function ExamScheduleCard({ s }: { s: ExamSchedule }) {
                               <td rowSpan={grp.length}
                                   style={{ padding: "8px 12px", textAlign: "center", fontWeight: 700, verticalAlign: "middle",
                                            background: "rgba(0,45,105,0.07)", color: "var(--eduwill-navy)",
-                                           borderRight: "2px solid var(--eduwill-navy)" }}>
+                                           borderRight: "2px solid var(--eduwill-navy)", whiteSpace: "nowrap" }}>
                                 {pr.year}
                               </td>
                             )}
@@ -431,7 +487,7 @@ function ExamScheduleCard({ s }: { s: ExamSchedule }) {
                   </table>
                 </div>
                 <p className="text-xs mt-2 px-1" style={{ color: "var(--text-muted)" }}>
-                  ※ 출처: 큐넷·검정기관 공식 발표 기준 (근사치 포함)
+                  ※ 출처: 큐넷·검정기관 공식 발표 기준
                 </p>
               </div>
             );
