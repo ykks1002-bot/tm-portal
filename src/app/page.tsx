@@ -241,132 +241,194 @@ const OUTLOOK_CONFIG: Record<string, { label: string; color: string; bg: string;
 };
 
 // ── 시험 정보 섹션 ─────────────────────────────────────────────────────────────
-function ExamSection({ schedules }: { schedules: ExamSchedule[] }) {
-  if (!schedules.length) return <EmptyState message="등록된 시험 일정이 없습니다." />;
+const EXAM_TABS = [
+  { key: "시험일정", label: "📅 시험일정" },
+  { key: "시험과목", label: "📋 시험과목" },
+  { key: "시험시간", label: "⏱️ 시험시간" },
+  { key: "합격률",  label: "📊 합격률" },
+  { key: "유의사항", label: "⚠️ 유의사항" },
+] as const;
+type ExamTab = typeof EXAM_TABS[number]["key"];
+
+function ExamScheduleCard({ s }: { s: ExamSchedule }) {
+  const [active, setActive] = useState<ExamTab | null>("시험일정");
+  const subjects: { round: string; name: string; count: string; time: string }[] =
+    s.subjects_json ? JSON.parse(s.subjects_json) : [];
+  const rounds = Array.from(new Set(subjects.map(x => x.round)));
+
+  const toggle = (tab: ExamTab) => setActive(prev => prev === tab ? null : tab);
+
+  const dateRows = [
+    { label: "필기(1차) 원서접수", start: s.written_reg_start, end: s.written_reg_end },
+    { label: "필기(1차) 시험일",   date: s.written_exam_date },
+    { label: "필기(1차) 합격발표", date: s.written_result_date },
+    ...(s.practical_exam_date ? [
+      { label: "실기(2차) 원서접수", start: s.practical_reg_start, end: s.practical_reg_end },
+      { label: "실기(2차) 시험일",   date: s.practical_exam_date },
+      { label: "실기(2차) 합격발표", date: s.practical_result_date },
+    ] : []),
+  ].filter(row => row.date || row.start);
 
   return (
-    <div className="space-y-5">
-      {schedules.map(s => {
-        const subjects: { round: string; name: string; count: string; time: string }[] =
-          s.subjects_json ? JSON.parse(s.subjects_json) : [];
-        const rounds = Array.from(new Set(subjects.map(x => x.round)));
+    <div className="rounded-2xl overflow-hidden"
+         style={{ border: "1px solid var(--border)", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+      <div className="px-5 py-3.5 flex items-center justify-between"
+           style={{ background: "var(--eduwill-navy)" }}>
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-white font-bold text-base">{s.year}년 {s.round_label}</span>
+          {s.organizer && (
+            <span className="text-xs px-2.5 py-0.5 rounded-full font-medium"
+                  style={{ background: "rgba(255,255,255,0.15)", color: "rgba(255,255,255,0.85)" }}>
+              {s.organizer}
+            </span>
+          )}
+          {s.exam_fee && (
+            <span className="text-xs px-2.5 py-0.5 rounded-full font-medium"
+                  style={{ background: "rgba(255,255,255,0.15)", color: "rgba(255,255,255,0.85)" }}>
+              응시료 {s.exam_fee}
+            </span>
+          )}
+        </div>
+        {s.source_url && (
+          <a href={s.source_url} target="_blank" rel="noopener noreferrer"
+             className="text-xs px-2.5 py-0.5 rounded-full shrink-0"
+             style={{ background: "rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.7)", textDecoration: "none" }}>
+            출처 ↗
+          </a>
+        )}
+      </div>
 
-        return (
-          <div key={s.id} className="rounded-2xl overflow-hidden"
-               style={{ border: "1px solid var(--border)", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
-            <div className="px-5 py-3.5 flex items-center justify-between"
-                 style={{ background: "var(--eduwill-navy)" }}>
-              <div className="flex items-center gap-3">
-                <span className="text-white font-bold text-base">
-                  {s.year}년 {s.round_label}
-                </span>
-                {s.organizer && (
-                  <span className="text-xs px-2.5 py-0.5 rounded-full font-medium"
-                        style={{ background: "rgba(255,255,255,0.15)", color: "rgba(255,255,255,0.85)" }}>
-                    {s.organizer}
+      <div className="flex gap-2 px-5 pt-4 pb-2 flex-wrap">
+        {EXAM_TABS.map(tab => (
+          <button key={tab.key} onClick={() => toggle(tab.key)}
+                  className="text-xs px-3 py-1.5 rounded-full font-medium transition-all"
+                  style={{
+                    background: active === tab.key ? "var(--eduwill-navy)" : "var(--surface2)",
+                    color: active === tab.key ? "white" : "var(--text-muted)",
+                    border: `1px solid ${active === tab.key ? "var(--eduwill-navy)" : "var(--border)"}`,
+                    cursor: "pointer",
+                  }}>
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {active && (
+        <div className="px-5 pb-5 pt-2">
+          {active === "시험일정" && (
+            <div className="space-y-1">
+              {dateRows.length > 0 ? dateRows.map((row, i) => (
+                <div key={i} className="flex gap-3 items-start text-sm px-3 py-2 rounded-lg"
+                     style={{ background: i % 2 === 0 ? "var(--surface2)" : "transparent" }}>
+                  <span className="shrink-0 w-32 text-xs pt-0.5" style={{ color: "var(--text-muted)" }}>
+                    {row.label}
                   </span>
-                )}
-              </div>
-              {s.source_url && (
-                <a href={s.source_url} target="_blank" rel="noopener noreferrer"
-                   className="text-xs px-2.5 py-0.5 rounded-full"
-                   style={{ background: "rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.7)", textDecoration: "none" }}>
-                  출처 바로가기 ↗
-                </a>
-              )}
-            </div>
-
-            <div className="p-5 grid gap-5" style={{ gridTemplateColumns: "1fr 1fr" }}>
-              {/* 좌: 시험 일정 */}
-              <div>
-                <h3 className="text-xs font-bold uppercase mb-3 tracking-wider"
-                    style={{ color: "var(--text-muted)" }}>📅 시험 일정</h3>
-                <div className="space-y-2.5">
-                  {[
-                    { label: "필기(1차) 원서접수",  start: s.written_reg_start,    end: s.written_reg_end },
-                    { label: "필기(1차) 시험일",    date: s.written_exam_date },
-                    { label: "필기(1차) 합격발표",  date: s.written_result_date },
-                    ...(s.practical_exam_date ? [
-                      { label: "실기(2차) 원서접수", start: s.practical_reg_start, end: s.practical_reg_end },
-                      { label: "실기(2차) 시험일",   date: s.practical_exam_date },
-                      { label: "실기(2차) 합격발표", date: s.practical_result_date },
-                    ] : []),
-                  ].filter(row => row.date || row.start).map((row, i) => (
-                    <div key={i} className="flex gap-2 text-sm">
-                      <span className="shrink-0 w-36 text-xs pt-0.5" style={{ color: "var(--text-muted)" }}>
-                        {row.label}
-                      </span>
-                      <span className="font-medium" style={{ color: "var(--text)" }}>
-                        {row.date ?? `${row.start} ~ ${row.end}`}
-                      </span>
-                    </div>
-                  ))}
+                  <span className="font-medium text-xs" style={{ color: "var(--text)" }}>
+                    {row.date ?? `${row.start} ~ ${row.end}`}
+                  </span>
                 </div>
-                {s.exam_fee && (
-                  <div className="mt-4 flex items-center gap-2">
-                    <span className="text-xs" style={{ color: "var(--text-muted)" }}>💰 응시료</span>
-                    <span className="text-sm font-semibold" style={{ color: "var(--eduwill-navy)" }}>{s.exam_fee}</span>
+              )) : <EmptyState message="시험 일정 정보가 없습니다." />}
+            </div>
+          )}
+          {active === "시험과목" && (
+            <div className="space-y-3">
+              {rounds.length > 0 ? rounds.map(round => (
+                <div key={round}>
+                  <div className="text-xs font-bold mb-1.5 px-2 py-0.5 rounded inline-block"
+                       style={{ background: "rgba(0,45,105,0.08)", color: "var(--eduwill-navy)" }}>
+                    {round}
                   </div>
-                )}
-              </div>
-
-              {/* 우: 시험과목 */}
-              <div>
-                <h3 className="text-xs font-bold uppercase mb-3 tracking-wider"
-                    style={{ color: "var(--text-muted)" }}>📋 시험과목 및 시험시간</h3>
-                <div className="space-y-3">
-                  {rounds.map(round => (
-                    <div key={round}>
-                      <div className="text-xs font-bold mb-1.5 px-2 py-0.5 rounded inline-block"
-                           style={{ background: "rgba(0,45,105,0.08)", color: "var(--eduwill-navy)" }}>
-                        {round}
+                  <div className="space-y-1">
+                    {subjects.filter(x => x.round === round).map((subj, si) => (
+                      <div key={si} className="flex items-center justify-between text-xs gap-2 px-3 py-2 rounded-lg"
+                           style={{ background: "var(--surface2)" }}>
+                        <span style={{ color: "var(--text)" }}>{subj.name}</span>
+                        {subj.count && (
+                          <span className="shrink-0 px-2 py-0.5 rounded font-medium"
+                                style={{ background: "rgba(79,127,255,0.1)", color: "var(--accent)" }}>
+                            {subj.count}
+                          </span>
+                        )}
                       </div>
-                      <div className="space-y-1">
-                        {subjects.filter(x => x.round === round).map((subj, si) => (
-                          <div key={si} className="flex items-start justify-between text-xs gap-2 px-2 py-1.5 rounded-lg"
-                               style={{ background: "var(--surface2)" }}>
-                            <span style={{ color: "var(--text)" }}>{subj.name}</span>
-                            <div className="shrink-0 flex gap-1.5">
-                              {subj.count && (
-                                <span className="px-1.5 py-0.5 rounded"
-                                      style={{ background: "rgba(79,127,255,0.1)", color: "var(--accent)" }}>
-                                  {subj.count}
-                                </span>
-                              )}
-                              {subj.time && (
-                                <span className="px-1.5 py-0.5 rounded"
-                                      style={{ background: "rgba(0,0,0,0.05)", color: "var(--text-muted)" }}>
-                                  {subj.time}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )) : <EmptyState message="시험과목 정보가 없습니다." />}
             </div>
-
-            {s.notes && (
-              <div className="px-5 pb-5">
-                <div className="rounded-xl p-4"
-                     style={{ background: "#FFFDF0", borderLeft: "3px solid var(--eduwill-yellow)" }}>
-                  <div className="text-xs font-bold mb-2" style={{ color: "var(--eduwill-navy)" }}>⚠️ 유의사항</div>
-                  <p className="text-xs leading-relaxed whitespace-pre-line" style={{ color: "#374151" }}>{s.notes}</p>
+          )}
+          {active === "시험시간" && (
+            <div className="space-y-3">
+              {rounds.length > 0 ? rounds.map(round => (
+                <div key={round}>
+                  <div className="text-xs font-bold mb-1.5 px-2 py-0.5 rounded inline-block"
+                       style={{ background: "rgba(0,45,105,0.08)", color: "var(--eduwill-navy)" }}>
+                    {round}
+                  </div>
+                  <div className="space-y-1">
+                    {subjects.filter(x => x.round === round).map((subj, si) => (
+                      <div key={si} className="flex items-center justify-between text-xs gap-2 px-3 py-2 rounded-lg"
+                           style={{ background: "var(--surface2)" }}>
+                        <span style={{ color: "var(--text)" }}>{subj.name}</span>
+                        {subj.time ? (
+                          <span className="shrink-0 px-2 py-0.5 rounded"
+                                style={{ background: "rgba(0,0,0,0.05)", color: "var(--text-muted)" }}>
+                            {subj.time}
+                          </span>
+                        ) : (
+                          <span className="shrink-0 text-xs" style={{ color: "var(--text-muted)" }}>-</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
+              )) : <EmptyState message="시험시간 정보가 없습니다." />}
+            </div>
+          )}
+          {active === "합격률" && (
+            <div className="rounded-xl p-4 text-center"
+                 style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
+              <p className="text-sm py-2" style={{ color: "var(--text-muted)" }}>
+                합격률 데이터 업데이트 예정입니다.
+              </p>
+            </div>
+          )}
+          {active === "유의사항" && (
+            s.notes ? (
+              <div className="rounded-xl p-4"
+                   style={{ background: "#FFFDF0", borderLeft: "3px solid var(--eduwill-yellow)" }}>
+                <p className="text-xs leading-relaxed whitespace-pre-line" style={{ color: "#374151" }}>
+                  {s.notes}
+                </p>
               </div>
-            )}
-          </div>
-        );
-      })}
+            ) : (
+              <EmptyState message="유의사항 정보가 없습니다." />
+            )
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ExamSection({ schedules }: { schedules: ExamSchedule[] }) {
+  if (!schedules.length) return <EmptyState message="등록된 시험 일정이 없습니다." />;
+  return (
+    <div className="space-y-5">
+      {schedules.map(s => <ExamScheduleCard key={s.id} s={s} />)}
     </div>
   );
 }
 
 // ── 취업 전망 섹션 ─────────────────────────────────────────────────────────────
+const EMP_TABS = [
+  { key: "고용지표",   label: "📊 고용지표" },
+  { key: "고용전망",   label: "📈 고용전망" },
+  { key: "상담포인트", label: "📌 상담포인트" },
+] as const;
+type EmpTab = typeof EMP_TABS[number]["key"];
+
 function EmploymentSection({ stat }: { stat: EmploymentStat | null }) {
+  const [active, setActive] = useState<EmpTab | null>("고용지표");
   if (!stat) return <EmptyState message="등록된 취업 전망 데이터가 없습니다." />;
 
   const talkingPoints: string[] = stat.talking_points_json
@@ -374,66 +436,83 @@ function EmploymentSection({ stat }: { stat: EmploymentStat | null }) {
   const outlook = stat.employment_outlook
     ? (OUTLOOK_CONFIG[stat.employment_outlook] ?? OUTLOOK_CONFIG["유지"]) : null;
 
+  const toggle = (tab: EmpTab) => setActive(prev => prev === tab ? null : tab);
+
   return (
-    <div className="space-y-4">
-      <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
-        {[
-          { icon: "👥", label: "종사자 수",  value: stat.worker_count },
-          { icon: "💵", label: "평균 임금",  value: stat.avg_wage },
-          { icon: "📈", label: "고용 전망",  value: outlook?.label, badge: true, color: outlook?.color, bg: outlook?.bg },
-        ].filter(c => c.value).map((card, i) => (
-          <div key={i} className="rounded-2xl p-4 flex flex-col gap-1.5"
-               style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
-            <span className="text-xl">{card.icon}</span>
-            <span className="text-xs" style={{ color: "var(--text-muted)" }}>{card.label}</span>
-            {card.badge ? (
-              <span className="inline-block text-sm font-bold px-3 py-1 rounded-full w-fit"
-                    style={{ background: card.bg, color: card.color }}>{card.value}</span>
-            ) : (
-              <span className="text-base font-bold" style={{ color: "var(--eduwill-navy)" }}>{card.value}</span>
-            )}
-          </div>
+    <div>
+      <div className="flex gap-2 flex-wrap mb-3">
+        {EMP_TABS.map(tab => (
+          <button key={tab.key} onClick={() => toggle(tab.key)}
+                  className="text-xs px-3 py-1.5 rounded-full font-medium transition-all"
+                  style={{
+                    background: active === tab.key ? "var(--eduwill-navy)" : "var(--surface2)",
+                    color: active === tab.key ? "white" : "var(--text-muted)",
+                    border: `1px solid ${active === tab.key ? "var(--eduwill-navy)" : "var(--border)"}`,
+                    cursor: "pointer",
+                  }}>
+            {tab.label}
+          </button>
         ))}
       </div>
 
-      {(stat.outlook_detail || outlook) && (
-        <div className="rounded-2xl p-4" style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
-          {outlook && (
-            <div className="flex items-center gap-3 mb-3">
-              <span className="text-xs font-bold shrink-0" style={{ color: "var(--text-muted)" }}>고용 전망 지수</span>
-              <div className="flex-1 rounded-full h-2 overflow-hidden" style={{ background: "var(--border)" }}>
-                <div className="h-full rounded-full" style={{ width: `${outlook.bar}%`, background: outlook.color }} />
-              </div>
-              <span className="text-xs font-semibold shrink-0" style={{ color: outlook.color }}>{outlook.label}</span>
+      {active === "고용지표" && (
+        <div className="space-y-2">
+          {[
+            { label: "종사자 수", value: stat.worker_count },
+            { label: "평균 임금", value: stat.avg_wage },
+          ].filter(r => r.value).map((row, i) => (
+            <div key={i} className="flex items-center gap-3 px-4 py-3 rounded-xl"
+                 style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
+              <span className="text-xs shrink-0 w-20" style={{ color: "var(--text-muted)" }}>{row.label}</span>
+              <span className="text-sm font-bold" style={{ color: "var(--eduwill-navy)" }}>{row.value}</span>
             </div>
-          )}
-          {stat.outlook_detail && (
-            <p className="text-sm leading-relaxed" style={{ color: "var(--text)" }}>{stat.outlook_detail}</p>
-          )}
+          ))}
+          {!stat.worker_count && !stat.avg_wage && <EmptyState message="고용 지표 데이터가 없습니다." />}
           {stat.stat_year && (
-            <p className="text-xs mt-2" style={{ color: "var(--text-muted)" }}>
+            <p className="text-xs mt-1 px-1" style={{ color: "var(--text-muted)" }}>
               기준: {stat.stat_year}년 | 출처: {stat.data_source}
             </p>
           )}
         </div>
       )}
-
-      {talkingPoints.length > 0 && (
-        <div className="rounded-2xl p-4" style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
-          <div className="flex items-center gap-2 mb-3">
-            <span className="text-sm">📌</span>
-            <h3 className="font-bold text-sm" style={{ color: "var(--eduwill-navy)" }}>상담 활용 포인트</h3>
-          </div>
-          <div className="space-y-2">
+      {active === "고용전망" && (
+        <div className="space-y-3">
+          {outlook ? (
+            <div className="px-4 py-3 rounded-xl"
+                 style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
+              <div className="flex items-center gap-3 mb-2">
+                <span className="text-xs font-bold shrink-0" style={{ color: "var(--text-muted)" }}>고용 전망 지수</span>
+                <div className="flex-1 rounded-full h-2 overflow-hidden" style={{ background: "var(--border)" }}>
+                  <div className="h-full rounded-full" style={{ width: `${outlook.bar}%`, background: outlook.color }} />
+                </div>
+                <span className="text-xs font-semibold shrink-0 px-2.5 py-0.5 rounded-full"
+                      style={{ background: outlook.bg, color: outlook.color }}>
+                  {outlook.label}
+                </span>
+              </div>
+              {stat.outlook_detail && (
+                <p className="text-sm leading-relaxed mt-2" style={{ color: "var(--text)" }}>
+                  {stat.outlook_detail}
+                </p>
+              )}
+            </div>
+          ) : (
+            <EmptyState message="고용 전망 데이터가 없습니다." />
+          )}
+        </div>
+      )}
+      {active === "상담포인트" && (
+        talkingPoints.length > 0 ? (
+          <div className="space-y-1.5">
             {talkingPoints.map((pt, i) => (
-              <div key={i} className="flex items-start gap-2.5 text-xs leading-relaxed"
-                   style={{ color: "var(--text)" }}>
+              <div key={i} className="flex items-start gap-2.5 text-xs leading-relaxed px-3 py-2 rounded-lg"
+                   style={{ background: "var(--surface2)" }}>
                 <span className="shrink-0 font-bold mt-0.5" style={{ color: "var(--eduwill-navy)" }}>•</span>
-                <span>{pt}</span>
+                <span style={{ color: "var(--text)" }}>{pt}</span>
               </div>
             ))}
           </div>
-        </div>
+        ) : <EmptyState message="상담 포인트 데이터가 없습니다." />
       )}
     </div>
   );

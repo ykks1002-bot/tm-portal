@@ -1,10 +1,22 @@
-[{
-  "id": 10, "course_id": 10, "year": 2026, "round_label": "2026년 우정9급(계리직)",
-  "organizer": "우정사업본부",
-  "subjects_json": "[{\"round\":\"필기\",\"name\":\"우편 및 금융상식(공통)\",\"count\":\"25문항\",\"time\":\"교시별 25분\"},{\"round\":\"필기\",\"name\":\"컴퓨터일반(공통)\",\"count\":\"25문항\",\"time\":\"교시별 25분\"},{\"round\":\"필기\",\"name\":\"한국사(공통)\",\"count\":\"25문항\",\"time\":\"교시별 25분\"}]",
-  "exam_fee": "무료",
-  "written_reg_start": "2026.04.20 (예정)", "written_reg_end": "2026.04.24 (예정)",
-  "written_exam_date": "2026.06.13 (예정)", "written_result_date": "2026.07.22 (예정)",
-  "notes": "• 우정직렬(계리직): 우체국 창구·금융업무\n• 공무원 신분으로 우체국 근무\n• 필기 합격 후 면접 전형\n• 정확한 일정은 우정사업본부 공고 확인 필요",
-  "source_url": "https://www.koreapost.go.kr", "data_source": "manual"
-}]
+[
+  {
+    "id": 10,
+    "course_id": 10,
+    "year": 2026,
+    "round_label": "2026년 우정9급(계리직)",
+    "organizer": "우정사업본부",
+    "subjects_json": "[{\"round\":\"필기\",\"name\":\"우편 및 금융상식(공통)\",\"count\":\"25문항\",\"time\":\"교시별 25분\"},{\"round\":\"필기\",\"name\":\"컴퓨터일반(공통)\",\"count\":\"25문항\",\"time\":\"교시별 25분\"},{\"round\":\"필기\",\"name\":\"한국사(공통)\",\"count\":\"25문항\",\"time\":\"교시별 25분\"}]",
+    "exam_fee": "무료",
+    "written_reg_start": "2026.01.15",
+    "written_reg_end": "2026.01.19",
+    "written_exam_date": "2026.03.28",
+    "written_result_date": "2026.04.24",
+    "notes": "• 우정직렬(계리직): 우체국 창구·금융업무\n• 공무원 신분으로 우체국 근무\n• 필기 합격 후 면접 전형\n• 정확한 일정은 우정사업본부 공고 확인 필요",
+    "source_url": "https://www.koreapost.go.kr",
+    "data_source": "manual",
+    "practical_reg_start": null,
+    "practical_reg_end": null,
+    "practical_exam_date": "2026.05.19 ~ 05.21 (면접)",
+    "practical_result_date": "2026.06.12 (최종합격)"
+  }
+]
