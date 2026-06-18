@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { api, ssKey, type PriceRow, type PriceAlert } from "@/lib/api";
+import { getGithubConfig, githubCommitFile, githubCommitFiles } from "@/lib/github";
 
 function fmt(iso: string | null) {
   if (!iso) return "—";
@@ -78,7 +79,7 @@ async function saveStaticPrice(courseId: number, itemId: number, competitorId: n
 }
 
 // ── 정적 모드 가격 행 ─────────────────────────────────────────────────────────
-function StaticPriceRowItem({ row, onSaved }: { row: StaticPriceRow; onSaved: () => void }) {
+function StaticPriceRowItem({ row, onSaved }: { row: StaticPriceRow; onSaved: (msg: string) => void }) {
   const isEduwill = row.competitorId === null;
   const [editing, setEditing] = useState(false);
   const [val, setVal] = useState(row.valueText);
@@ -93,7 +94,21 @@ function StaticPriceRowItem({ row, onSaved }: { row: StaticPriceRow; onSaved: ()
     try {
       await saveStaticPrice(row.courseId, row.itemId, row.competitorId, val, isEduwill ? desc : undefined);
       setEditing(false);
-      onSaved();
+      const file = `course-${row.courseId}-comparison.json`;
+      const data = localStorage.getItem(ssKey(file));
+      const cfg = getGithubConfig();
+      if (cfg && data) {
+        try {
+          await githubCommitFile(cfg, `public/data/${file}`,
+            JSON.stringify(JSON.parse(data), null, 2),
+            `가격 업데이트: ${row.courseName} - ${row.itemName}`);
+          onSaved("GitHub에 자동 저장됨 ✓");
+        } catch (ge) {
+          onSaved(`⚠ GitHub 오류: ${(ge as Error).message}`);
+        }
+      } else {
+        onSaved("저장 완료 (브라우저에 저장됨)");
+      }
     } catch (e) {
       setErr((e as Error).message || "저장 실패");
     } finally { setSaving(false); }
@@ -292,18 +307,36 @@ export default function AdminPricesPage() {
 
   const flash = (m: string) => { setMsg(m); setTimeout(() => setMsg(""), 3000); };
 
-  const handleExportAll = () => {
+  const handleExportAll = async () => {
     const courses = [...new Set(staticRows.map(r => r.courseId))];
     const modified = courses.filter(id => localStorage.getItem(ssKey(`course-${id}-comparison.json`)));
     if (modified.length === 0) { flash("변경된 데이터가 없습니다."); return; }
-    modified.forEach(id => {
-      const file = `course-${id}-comparison.json`;
-      const data = localStorage.getItem(ssKey(file));
-      if (!data) return;
-      const blob = new Blob([JSON.stringify(JSON.parse(data), null, 2)], { type: "application/json" });
-      const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = file; a.click();
-    });
-    flash(`${modified.length}개 파일 다운로드됨. GitHub public/data/에 업로드하세요.`);
+
+    const cfg = getGithubConfig();
+    if (cfg) {
+      const files = modified
+        .map(id => {
+          const file = `course-${id}-comparison.json`;
+          const data = localStorage.getItem(ssKey(file));
+          return data ? { path: `public/data/${file}`, content: JSON.stringify(JSON.parse(data), null, 2) } : null;
+        })
+        .filter((f): f is { path: string; content: string } => f !== null);
+      try {
+        await githubCommitFiles(cfg, files, `가격 일괄 업데이트: ${modified.length}개 과목`);
+        flash(`GitHub에 ${modified.length}개 파일 자동 저장됨 ✓`);
+      } catch (e) {
+        flash(`⚠ GitHub 오류: ${(e as Error).message}`);
+      }
+    } else {
+      modified.forEach(id => {
+        const file = `course-${id}-comparison.json`;
+        const data = localStorage.getItem(ssKey(file));
+        if (!data) return;
+        const blob = new Blob([JSON.stringify(JSON.parse(data), null, 2)], { type: "application/json" });
+        const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = file; a.click();
+      });
+      flash(`${modified.length}개 파일 다운로드됨. GitHub public/data/에 업로드하세요.`);
+    }
   };
 
   const markSeen = async (id: number) => { await api.markAlertSeen(id); setAlerts(prev => prev.map(a => a.id === id ? { ...a, status: "seen" } : a)); };
@@ -340,14 +373,16 @@ export default function AdminPricesPage() {
         {isStaticMode && (
           <span className="ml-2 text-xs px-2 py-0.5 rounded-full"
                 style={{ background: "#FEF3C7", color: "#92400E", border: "1px solid #FDE68A" }}>
-            정적 모드 — 편집 후 JSON 내보내기
+            정적 모드
           </span>
         )}
         {isStaticMode && (
           <button onClick={handleExportAll}
                   className="ml-auto text-xs px-3 py-1.5 rounded-lg font-medium"
                   style={{ background: "rgba(34,197,94,0.15)", color: "#4ade80", border: "1px solid rgba(34,197,94,0.3)" }}>
-            JSON 내보내기
+            {typeof window !== "undefined" && localStorage.getItem("tm_github_config")
+              ? "GitHub에 일괄 저장"
+              : "JSON 내보내기"}
           </button>
         )}
         {msg && (
@@ -360,7 +395,9 @@ export default function AdminPricesPage() {
 
       {isStaticMode && (
         <div className="px-6 py-2 text-xs" style={{ background: "rgba(79,127,255,0.08)", color: "var(--accent)", borderBottom: "1px solid var(--border)" }}>
-          ℹ 변경사항은 브라우저에 저장됩니다. &quot;JSON 내보내기&quot;로 다운로드 후 GitHub public/data/에 업로드하면 영구 반영됩니다.
+          {typeof window !== "undefined" && localStorage.getItem("tm_github_config")
+            ? "ℹ GitHub 연결됨 — 저장 버튼 클릭 시 즉시 GitHub에 반영됩니다."
+            : "ℹ 변경사항은 브라우저에 저장됩니다. 관리자 페이지에서 GitHub 연동을 설정하면 자동 반영됩니다."}
         </div>
       )}
 
@@ -421,7 +458,7 @@ export default function AdminPricesPage() {
                     <StaticPriceRowItem
                       key={`${row.courseId}-${row.itemId}-${row.competitorId ?? "e"}`}
                       row={row}
-                      onSaved={() => { flash("저장 완료 (브라우저에 저장됨)"); reloadStatic(); }}
+                      onSaved={(m) => { flash(m); reloadStatic(); }}
                     />
                   ))}
                 </tbody>

@@ -4,6 +4,135 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { api, type Course, type AdminStats, type Promotion, type User, type PriceAlert, type ScrapeStatus } from "@/lib/api";
+import { getGithubConfig, setGithubConfig, autoDetectGithubRepo, type GithubConfig } from "@/lib/github";
+
+function GithubConfigCard() {
+  const [config, setConfig] = useState<GithubConfig | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [pat, setPat] = useState("");
+  const [owner, setOwner] = useState("");
+  const [repo, setRepo] = useState("");
+  const [branch, setBranch] = useState("main");
+  const [msg, setMsg] = useState("");
+
+  useEffect(() => {
+    const cfg = getGithubConfig();
+    setConfig(cfg);
+    if (!cfg) {
+      const detected = autoDetectGithubRepo();
+      setOwner(detected.owner);
+      setRepo(detected.repo);
+    } else {
+      setOwner(cfg.owner); setRepo(cfg.repo); setBranch(cfg.branch);
+    }
+  }, []);
+
+  const save = () => {
+    if (!pat || !owner || !repo || !branch) { setMsg("모든 필드를 입력하세요."); return; }
+    const cfg: GithubConfig = { owner, repo, branch, pat };
+    setGithubConfig(cfg);
+    setConfig(cfg);
+    setEditing(false);
+    setPat("");
+    setMsg("저장됨. 이제 편집 저장 시 GitHub에 자동 커밋됩니다.");
+    setTimeout(() => setMsg(""), 4000);
+  };
+
+  const clear = () => {
+    setGithubConfig(null);
+    setConfig(null);
+    const detected = autoDetectGithubRepo();
+    setOwner(detected.owner); setRepo(detected.repo); setBranch("main"); setPat("");
+    setMsg("연결이 해제되었습니다.");
+    setTimeout(() => setMsg(""), 2000);
+  };
+
+  const inputStyle: React.CSSProperties = {
+    background: "var(--surface2)", border: "1px solid var(--border)", color: "var(--text)",
+  };
+
+  return (
+    <div className="rounded-xl p-5 space-y-3" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <span className="text-xl">⚙</span>
+          <div>
+            <p className="font-semibold text-sm" style={{ color: "var(--text)" }}>GitHub 자동 커밋</p>
+            <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
+              설정 후 저장하면 JSON 파일이 GitHub에 자동 반영됩니다
+            </p>
+          </div>
+        </div>
+        {config ? (
+          <span className="text-xs px-2 py-0.5 rounded-full"
+                style={{ background: "rgba(34,197,94,0.12)", color: "#4ade80", border: "1px solid rgba(34,197,94,0.3)" }}>
+            연결됨
+          </span>
+        ) : (
+          <span className="text-xs px-2 py-0.5 rounded-full"
+                style={{ background: "var(--surface2)", color: "var(--text-muted)", border: "1px solid var(--border)" }}>
+            미연결
+          </span>
+        )}
+      </div>
+
+      {config && !editing ? (
+        <div className="space-y-2">
+          <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+            저장소: <span style={{ color: "var(--text)" }}>{config.owner}/{config.repo}</span>
+            {" "}({config.branch} 브랜치)
+          </p>
+          <div className="flex gap-2">
+            <button onClick={() => setEditing(true)}
+                    className="text-xs px-3 py-1.5 rounded-lg"
+                    style={{ background: "var(--surface2)", color: "var(--text-muted)", border: "1px solid var(--border)" }}>
+              편집
+            </button>
+            <button onClick={clear}
+                    className="text-xs px-3 py-1.5 rounded-lg"
+                    style={{ background: "rgba(239,68,68,0.1)", color: "var(--danger)", border: "1px solid rgba(239,68,68,0.25)" }}>
+              연결 해제
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <div className="grid grid-cols-2 gap-2">
+            <input value={owner} onChange={e => setOwner(e.target.value)} placeholder="GitHub 사용자명 *"
+                   className="text-xs px-3 py-2 rounded-lg outline-none" style={inputStyle} />
+            <input value={repo} onChange={e => setRepo(e.target.value)} placeholder="저장소 이름 *"
+                   className="text-xs px-3 py-2 rounded-lg outline-none" style={inputStyle} />
+          </div>
+          <input value={branch} onChange={e => setBranch(e.target.value)} placeholder="브랜치 (기본: main)"
+                 className="w-full text-xs px-3 py-2 rounded-lg outline-none" style={inputStyle} />
+          <input type="password" value={pat} onChange={e => setPat(e.target.value)}
+                 placeholder="GitHub Personal Access Token (PAT) *"
+                 className="w-full text-xs px-3 py-2 rounded-lg outline-none" style={inputStyle} />
+          <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+            PAT 발급: GitHub → Settings → Developer settings → Personal access tokens → Contents: Read &amp; write
+          </p>
+          <div className="flex gap-2">
+            <button onClick={save}
+                    className="text-xs px-4 py-2 rounded-lg font-semibold"
+                    style={{ background: "var(--accent)", color: "white" }}>
+              저장
+            </button>
+            {editing && (
+              <button onClick={() => setEditing(false)}
+                      className="text-xs px-3 py-2 rounded-lg"
+                      style={{ background: "var(--surface2)", color: "var(--text-muted)", border: "1px solid var(--border)" }}>
+                취소
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+      {msg && (
+        <p className="text-xs" style={{ color: config ? "#4ade80" : "var(--text-muted)" }}>{msg}</p>
+      )}
+    </div>
+  );
+}
 
 function StatCard({ label, value, color }: { label: string; value: number; color: string }) {
   return (
@@ -172,6 +301,7 @@ export default function AdminPage() {
               <span className="ml-auto text-sm" style={{ color: "var(--accent)" }}>→</span>
             </Link>
           ))}
+          <GithubConfigCard />
         </main>
       </div>
     );

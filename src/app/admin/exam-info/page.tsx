@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { api, isStatic, ssKey, type ExamSchedule, type EmploymentStat } from "@/lib/api";
+import { getGithubConfig, githubCommitFile } from "@/lib/github";
 
 const COURSES = [
   { id: 1,  name: "공인중개사",   icon: "🏠" },
@@ -144,7 +145,9 @@ function ExamScheduleFormModal({ courseId, data, onSave, onClose }: {
         </button>
         <button onClick={() => onSave(form)} className="text-sm px-5 py-2 rounded-lg font-bold"
                 style={{ background: "var(--accent)", color: "white" }}>
-          {isStatic() ? "JSON 저장 & 다운로드" : "저장"}
+          {isStatic()
+            ? (typeof window !== "undefined" && localStorage.getItem("tm_github_config") ? "저장 (GitHub 자동 반영)" : "저장 & 다운로드")
+            : "저장"}
         </button>
       </div>
     </div>
@@ -202,7 +205,9 @@ function EmploymentStatFormModal({ data, onSave, onClose }: {
         </button>
         <button onClick={() => onSave(form)} className="text-sm px-5 py-2 rounded-lg font-bold"
                 style={{ background: "var(--accent)", color: "white" }}>
-          {isStatic() ? "JSON 저장 & 다운로드" : "저장"}
+          {isStatic()
+            ? (typeof window !== "undefined" && localStorage.getItem("tm_github_config") ? "저장 (GitHub 자동 반영)" : "저장 & 다운로드")
+            : "저장"}
         </button>
       </div>
     </div>
@@ -262,10 +267,16 @@ export default function AdminExamInfoPage() {
         const next = base.map(s => s.id === updated.id ? updated : s);
         if (!next.find(s => s.id === updated.id)) next.push(updated);
         localStorage.setItem(ssKey(file), JSON.stringify(next));
-        // also download
-        const blob = new Blob([JSON.stringify(next, null, 2)], { type: "application/json" });
-        const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = file; a.click();
-        flash(`저장 완료 — ${file} 다운로드됨. public/data/에 업로드 후 배포하세요.`);
+
+        const cfg = getGithubConfig();
+        if (cfg) {
+          await githubCommitFile(cfg, `public/data/${file}`, JSON.stringify(next, null, 2), `시험 일정 업데이트: ${file}`);
+          flash("GitHub에 자동 저장됨 ✓");
+        } else {
+          const blob = new Blob([JSON.stringify(next, null, 2)], { type: "application/json" });
+          const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = file; a.click();
+          flash(`저장 완료 — ${file} 다운로드됨. public/data/에 업로드 후 배포하세요.`);
+        }
         loadAll();
       } else {
         await api.updateExamSchedule(updated.id, updated);
@@ -286,9 +297,16 @@ export default function AdminExamInfoPage() {
       if (isStatic()) {
         const file = `course-${editTarget!.courseId}-employment.json`;
         localStorage.setItem(ssKey(file), JSON.stringify(updated));
-        const blob = new Blob([JSON.stringify(updated, null, 2)], { type: "application/json" });
-        const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = file; a.click();
-        flash(`저장 완료 — ${file} 다운로드됨. public/data/에 업로드 후 배포하세요.`);
+
+        const cfg = getGithubConfig();
+        if (cfg) {
+          await githubCommitFile(cfg, `public/data/${file}`, JSON.stringify(updated, null, 2), `취업 전망 업데이트: ${file}`);
+          flash("GitHub에 자동 저장됨 ✓");
+        } else {
+          const blob = new Blob([JSON.stringify(updated, null, 2)], { type: "application/json" });
+          const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = file; a.click();
+          flash(`저장 완료 — ${file} 다운로드됨. public/data/에 업로드 후 배포하세요.`);
+        }
         loadAll();
       } else {
         await api.updateEmploymentStat(updated.id, updated);

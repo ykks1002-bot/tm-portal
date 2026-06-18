@@ -11,8 +11,16 @@ import {
   type FAQ,
   type Competitor,
 } from "@/lib/api";
+import { getGithubConfig, githubCommitFile } from "@/lib/github";
 
 const BASE_PATH_DATA = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+
+async function autoGithubCommit(file: string, data: unknown, msg?: string): Promise<string | null> {
+  const cfg = getGithubConfig();
+  if (!cfg) return null;
+  await githubCommitFile(cfg, `public/data/${file}`, JSON.stringify(data, null, 2), msg ?? `데이터 업데이트: ${file}`);
+  return "GitHub에 자동 저장됨 ✓";
+}
 
 async function ssLoadFile<T>(file: string): Promise<T> {
   const saved = localStorage.getItem(ssKey(file));
@@ -76,13 +84,14 @@ function Btn({ onClick, children, variant = "primary" }: {
 
 // ── 비교표 편집 ────────────────────────────────────────────────────────────────
 function ComparisonEditor({
-  courseId, data, competitors, onRefresh, staticMode,
+  courseId, data, competitors, onRefresh, staticMode, onMessage,
 }: {
   courseId: number;
   data: ComparisonResponse;
   competitors: Competitor[];
   onRefresh: () => void;
   staticMode?: boolean;
+  onMessage?: (m: string) => void;
 }) {
   const [newItemName, setNewItemName] = useState("");
   const [newItemDesc, setNewItemDesc] = useState("");
@@ -100,8 +109,11 @@ function ComparisonEditor({
         is_eduwill_advantage: isAdv, sort_order: cur.items.length + 1,
         eduwill_value: "", competitor_values: {},
       };
-      ssSaveFile(file, { ...cur, items: [...cur.items, newItem] });
+      const newData = { ...cur, items: [...cur.items, newItem] };
+      ssSaveFile(file, newData);
       setNewItemName(""); setNewItemDesc(""); setIsAdv(false);
+      try { onMessage?.(await autoGithubCommit(file, newData) ?? "저장됨"); }
+      catch (e) { onMessage?.(`⚠ GitHub 오류: ${(e as Error).message}`); }
       onRefresh(); return;
     }
     await api.createComparisonItem(courseId, {
@@ -116,7 +128,10 @@ function ComparisonEditor({
     if (staticMode) {
       const file = `course-${courseId}-comparison.json`;
       const cur = await ssLoadFile<ComparisonResponse>(file);
-      ssSaveFile(file, { ...cur, items: cur.items.filter(i => i.id !== id) });
+      const newData = { ...cur, items: cur.items.filter(i => i.id !== id) };
+      ssSaveFile(file, newData);
+      try { onMessage?.(await autoGithubCommit(file, newData) ?? "삭제됨"); }
+      catch (e) { onMessage?.(`⚠ GitHub 오류: ${(e as Error).message}`); }
       onRefresh(); return;
     }
     await api.deleteComparisonItem(id);
@@ -127,7 +142,10 @@ function ComparisonEditor({
     if (staticMode) {
       const file = `course-${courseId}-comparison.json`;
       const cur = await ssLoadFile<ComparisonResponse>(file);
-      ssSaveFile(file, { ...cur, items: cur.items.map(i => i.id === item.id ? { ...i, is_eduwill_advantage: !i.is_eduwill_advantage } : i) });
+      const newData = { ...cur, items: cur.items.map(i => i.id === item.id ? { ...i, is_eduwill_advantage: !i.is_eduwill_advantage } : i) };
+      ssSaveFile(file, newData);
+      try { onMessage?.(await autoGithubCommit(file, newData) ?? "저장됨"); }
+      catch (e) { onMessage?.(`⚠ GitHub 오류: ${(e as Error).message}`); }
       onRefresh(); return;
     }
     await api.updateComparisonItem(item.id, { is_eduwill_advantage: !item.is_eduwill_advantage });
@@ -141,14 +159,17 @@ function ComparisonEditor({
     if (staticMode) {
       const file = `course-${courseId}-comparison.json`;
       const cur = await ssLoadFile<ComparisonResponse>(file);
-      ssSaveFile(file, {
+      const newData = {
         ...cur,
         items: cur.items.map(i => {
           if (i.id !== itemId) return i;
           if (competitorId === null) return { ...i, eduwill_value: value };
           return { ...i, competitor_values: { ...i.competitor_values, [String(competitorId)]: value } };
         }),
-      });
+      };
+      ssSaveFile(file, newData);
+      try { onMessage?.(await autoGithubCommit(file, newData) ?? "저장됨"); }
+      catch (e) { onMessage?.(`⚠ GitHub 오류: ${(e as Error).message}`); }
       setSaving(null); onRefresh(); return;
     }
     await api.upsertComparisonValue({ comparison_item_id: itemId, competitor_id: competitorId, value_text: value });
@@ -246,8 +267,8 @@ function ComparisonEditor({
 }
 
 // ── 강점 편집 ────────────────────────────────────────────────────────────────
-function StrengthsEditor({ courseId, strengths, onRefresh, staticMode }: {
-  courseId: number; strengths: StrengthPoint[]; onRefresh: () => void; staticMode?: boolean;
+function StrengthsEditor({ courseId, strengths, onRefresh, staticMode, onMessage }: {
+  courseId: number; strengths: StrengthPoint[]; onRefresh: () => void; staticMode?: boolean; onMessage?: (m: string) => void;
 }) {
   const [cat, setCat] = useState(STRENGTH_CATS[0]);
   const [title, setTitle] = useState("");
@@ -260,8 +281,11 @@ function StrengthsEditor({ courseId, strengths, onRefresh, staticMode }: {
       const file = `course-${courseId}-strengths.json`;
       const cur = await ssLoadFile<StrengthPoint[]>(file);
       const newItem: StrengthPoint = { id: ssNextId(), category: cat, title, description: desc, evidence_text: evidence, sort_order: cur.length + 1 };
-      ssSaveFile(file, [...cur, newItem]);
+      const newData = [...cur, newItem];
+      ssSaveFile(file, newData);
       setTitle(""); setDesc(""); setEvidence("");
+      try { onMessage?.(await autoGithubCommit(file, newData) ?? "저장됨"); }
+      catch (e) { onMessage?.(`⚠ GitHub 오류: ${(e as Error).message}`); }
       onRefresh(); return;
     }
     await api.createStrength(courseId, { category: cat, title, description: desc, evidence_text: evidence, sort_order: strengths.length + 1 });
@@ -274,7 +298,10 @@ function StrengthsEditor({ courseId, strengths, onRefresh, staticMode }: {
     if (staticMode) {
       const file = `course-${courseId}-strengths.json`;
       const cur = await ssLoadFile<StrengthPoint[]>(file);
-      ssSaveFile(file, cur.filter(s => s.id !== id));
+      const newData = cur.filter(s => s.id !== id);
+      ssSaveFile(file, newData);
+      try { onMessage?.(await autoGithubCommit(file, newData) ?? "삭제됨"); }
+      catch (e) { onMessage?.(`⚠ GitHub 오류: ${(e as Error).message}`); }
       onRefresh(); return;
     }
     await api.deleteStrength(id);
@@ -316,8 +343,8 @@ function StrengthsEditor({ courseId, strengths, onRefresh, staticMode }: {
 }
 
 // ── 스크립트 편집 ────────────────────────────────────────────────────────────
-function ScriptsEditor({ courseId, scripts, onRefresh, staticMode }: {
-  courseId: number; scripts: Script[]; onRefresh: () => void; staticMode?: boolean;
+function ScriptsEditor({ courseId, scripts, onRefresh, staticMode, onMessage }: {
+  courseId: number; scripts: Script[]; onRefresh: () => void; staticMode?: boolean; onMessage?: (m: string) => void;
 }) {
   const [tag, setTag] = useState(SITUATION_TAGS[0]);
   const [title, setTitle] = useState("");
@@ -329,8 +356,11 @@ function ScriptsEditor({ courseId, scripts, onRefresh, staticMode }: {
       const file = `course-${courseId}-scripts.json`;
       const cur = await ssLoadFile<Script[]>(file);
       const newItem: Script = { id: ssNextId(), situation_tag: tag, title, body_template: body, usage_count: 0 };
-      ssSaveFile(file, [...cur, newItem]);
+      const newData = [...cur, newItem];
+      ssSaveFile(file, newData);
       setTitle(""); setBody("");
+      try { onMessage?.(await autoGithubCommit(file, newData) ?? "저장됨"); }
+      catch (e) { onMessage?.(`⚠ GitHub 오류: ${(e as Error).message}`); }
       onRefresh(); return;
     }
     await api.createScript(courseId, { situation_tag: tag, title, body_template: body });
@@ -343,7 +373,10 @@ function ScriptsEditor({ courseId, scripts, onRefresh, staticMode }: {
     if (staticMode) {
       const file = `course-${courseId}-scripts.json`;
       const cur = await ssLoadFile<Script[]>(file);
-      ssSaveFile(file, cur.filter(s => s.id !== id));
+      const newData = cur.filter(s => s.id !== id);
+      ssSaveFile(file, newData);
+      try { onMessage?.(await autoGithubCommit(file, newData) ?? "삭제됨"); }
+      catch (e) { onMessage?.(`⚠ GitHub 오류: ${(e as Error).message}`); }
       onRefresh(); return;
     }
     await api.deleteScript(id);
@@ -391,8 +424,8 @@ function ScriptsEditor({ courseId, scripts, onRefresh, staticMode }: {
 }
 
 // ── FAQ 편집 ────────────────────────────────────────────────────────────────
-function FAQEditor({ courseId, faqs, onRefresh, staticMode }: {
-  courseId: number; faqs: FAQ[]; onRefresh: () => void; staticMode?: boolean;
+function FAQEditor({ courseId, faqs, onRefresh, staticMode, onMessage }: {
+  courseId: number; faqs: FAQ[]; onRefresh: () => void; staticMode?: boolean; onMessage?: (m: string) => void;
 }) {
   const [q, setQ] = useState("");
   const [a, setA] = useState("");
@@ -404,8 +437,11 @@ function FAQEditor({ courseId, faqs, onRefresh, staticMode }: {
       const file = `course-${courseId}-faq.json`;
       const cur = await ssLoadFile<FAQ[]>(file);
       const newItem: FAQ = { id: ssNextId(), question: q, answer: a, objection_type: type || undefined, is_active: true };
-      ssSaveFile(file, [...cur, newItem]);
+      const newData = [...cur, newItem];
+      ssSaveFile(file, newData);
       setQ(""); setA(""); setType("");
+      try { onMessage?.(await autoGithubCommit(file, newData) ?? "저장됨"); }
+      catch (e) { onMessage?.(`⚠ GitHub 오류: ${(e as Error).message}`); }
       onRefresh(); return;
     }
     await api.createFAQ(courseId, { question: q, answer: a, objection_type: type || undefined });
@@ -418,7 +454,10 @@ function FAQEditor({ courseId, faqs, onRefresh, staticMode }: {
     if (staticMode) {
       const file = `course-${courseId}-faq.json`;
       const cur = await ssLoadFile<FAQ[]>(file);
-      ssSaveFile(file, cur.filter(f => f.id !== id));
+      const newData = cur.filter(f => f.id !== id);
+      ssSaveFile(file, newData);
+      try { onMessage?.(await autoGithubCommit(file, newData) ?? "삭제됨"); }
+      catch (e) { onMessage?.(`⚠ GitHub 오류: ${(e as Error).message}`); }
       onRefresh(); return;
     }
     await api.deleteFAQ(id);
@@ -496,7 +535,7 @@ export default function AdminCoursePage({ params }: { params: Promise<{ id: stri
       .finally(() => setLoading(false));
   };
 
-  const handleExport = () => {
+  const handleExport = async () => {
     const files = [
       `course-${courseId}-comparison.json`,
       `course-${courseId}-strengths.json`,
@@ -505,13 +544,28 @@ export default function AdminCoursePage({ params }: { params: Promise<{ id: stri
     ];
     const modified = files.filter(f => localStorage.getItem(`tm_ss_${f}`));
     if (modified.length === 0) { setExportMsg("변경된 데이터가 없습니다."); return; }
-    modified.forEach(file => {
-      const data = localStorage.getItem(`tm_ss_${file}`);
-      if (!data) return;
-      const blob = new Blob([JSON.stringify(JSON.parse(data), null, 2)], { type: "application/json" });
-      const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = file; a.click();
-    });
-    setExportMsg(`${modified.length}개 파일을 다운로드했습니다. GitHub public/data/에 업로드하세요.`);
+
+    const cfg = getGithubConfig();
+    if (cfg) {
+      try {
+        for (const file of modified) {
+          const raw = localStorage.getItem(`tm_ss_${file}`);
+          if (!raw) continue;
+          await githubCommitFile(cfg, `public/data/${file}`, JSON.stringify(JSON.parse(raw), null, 2), `데이터 업데이트: ${file}`);
+        }
+        setExportMsg(`GitHub에 ${modified.length}개 파일 자동 저장됨 ✓`);
+      } catch (e) {
+        setExportMsg(`⚠ GitHub 오류: ${(e as Error).message}`);
+      }
+    } else {
+      modified.forEach(file => {
+        const data = localStorage.getItem(`tm_ss_${file}`);
+        if (!data) return;
+        const blob = new Blob([JSON.stringify(JSON.parse(data), null, 2)], { type: "application/json" });
+        const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = file; a.click();
+      });
+      setExportMsg(`${modified.length}개 파일을 다운로드했습니다. GitHub public/data/에 업로드하세요.`);
+    }
   };
 
   const handleReset = () => {
@@ -595,16 +649,16 @@ export default function AdminCoursePage({ params }: { params: Promise<{ id: stri
 
       <main className="max-w-5xl mx-auto px-6 py-6">
         {tab === "comparison" && (
-          <ComparisonEditor courseId={courseId} data={comparison} competitors={competitors} onRefresh={loadAll} staticMode={isStaticMode} />
+          <ComparisonEditor courseId={courseId} data={comparison} competitors={competitors} onRefresh={loadAll} staticMode={isStaticMode} onMessage={setExportMsg} />
         )}
         {tab === "strengths" && (
-          <StrengthsEditor courseId={courseId} strengths={strengths} onRefresh={loadAll} staticMode={isStaticMode} />
+          <StrengthsEditor courseId={courseId} strengths={strengths} onRefresh={loadAll} staticMode={isStaticMode} onMessage={setExportMsg} />
         )}
         {tab === "scripts" && (
-          <ScriptsEditor courseId={courseId} scripts={scripts} onRefresh={loadAll} staticMode={isStaticMode} />
+          <ScriptsEditor courseId={courseId} scripts={scripts} onRefresh={loadAll} staticMode={isStaticMode} onMessage={setExportMsg} />
         )}
         {tab === "faq" && (
-          <FAQEditor courseId={courseId} faqs={faqs} onRefresh={loadAll} staticMode={isStaticMode} />
+          <FAQEditor courseId={courseId} faqs={faqs} onRefresh={loadAll} staticMode={isStaticMode} onMessage={setExportMsg} />
         )}
       </main>
     </div>
