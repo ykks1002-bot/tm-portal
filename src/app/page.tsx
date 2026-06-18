@@ -355,7 +355,7 @@ function ExamScheduleCard({ s }: { s: ExamSchedule }) {
                   <tbody>
                     {rows.map((row, i) => (
                       <tr key={i} style={{
-                        borderTop: row.isFirst && i > 0 ? "2px solid rgba(0,45,105,0.25)" : "1px solid rgba(0,45,105,0.1)",
+                        borderTop: row.isFirst && i > 0 ? "2px solid rgba(0,45,105,0.45)" : "1px solid #C7D2E8",
                         background: i % 2 === 0 ? "white" : "#F0F4FF",
                       }}>
                         {row.isFirst && (
@@ -367,7 +367,7 @@ function ExamScheduleCard({ s }: { s: ExamSchedule }) {
                             {row.round}
                           </td>
                         )}
-                        <td style={{ padding: "10px 14px", color: "var(--text)", borderRight: "1px solid rgba(0,45,105,0.1)", fontWeight: 500 }}>{row.name}</td>
+                        <td style={{ padding: "10px 14px", color: "var(--text)", borderRight: "1px solid #C7D2E8", fontWeight: 500 }}>{row.name}</td>
                         <td style={{ padding: "10px 14px", textAlign: "center", fontWeight: 700,
                                      background: colBg, color: colColor, whiteSpace: "nowrap" }}>
                           {row.val}
@@ -406,7 +406,7 @@ function ExamScheduleCard({ s }: { s: ExamSchedule }) {
                           const isAvgRow = row.region === "(연도)평균";
                           return (
                             <tr key={i} style={{
-                              borderTop: "1px solid rgba(0,45,105,0.1)",
+                              borderTop: "1px solid #C7D2E8",
                               background: isAvgRow ? "rgba(0,45,105,0.09)" : i % 2 === 0 ? "white" : "#F0F4FF",
                               fontWeight: isAvgRow ? 700 : 400,
                             }}>
@@ -416,7 +416,7 @@ function ExamScheduleCard({ s }: { s: ExamSchedule }) {
                               </td>
                               {row.scores.map((sc, si) => (
                                 <td key={si} style={{ padding: "8px 10px", textAlign: "center", fontWeight: 600, color: scoreColor(sc),
-                                                      borderRight: "1px solid rgba(0,45,105,0.08)" }}>
+                                                      borderRight: "1px solid #C7D2E8" }}>
                                   {sc}
                                 </td>
                               ))}
@@ -475,7 +475,7 @@ function ExamScheduleCard({ s }: { s: ExamSchedule }) {
                         const grp = passRates.filter(r => r.year === yr);
                         return grp.map((pr, pi) => (
                           <tr key={`${yi}-${pi}`} style={{
-                            borderTop: pi === 0 && yi > 0 ? "2px solid rgba(0,45,105,0.25)" : "1px solid rgba(0,45,105,0.1)",
+                            borderTop: pi === 0 && yi > 0 ? "2px solid rgba(0,45,105,0.45)" : "1px solid #C7D2E8",
                             background: yi % 2 === 0 ? "white" : "#F0F4FF",
                           }}>
                             {pi === 0 && (
@@ -487,11 +487,11 @@ function ExamScheduleCard({ s }: { s: ExamSchedule }) {
                               </td>
                             )}
                             <td style={{ padding: "10px 14px", textAlign: "center", color: "var(--text-muted)", whiteSpace: "nowrap",
-                                         borderRight: "1px solid rgba(0,45,105,0.1)", fontWeight: 500 }}>{pr.round}</td>
+                                         borderRight: "1px solid #C7D2E8", fontWeight: 500 }}>{pr.round}</td>
                             <td style={{ padding: "10px 14px", textAlign: "right", color: "var(--text)", fontWeight: 500,
-                                         borderRight: "1px solid rgba(0,45,105,0.1)" }}>{pr.applicants}</td>
+                                         borderRight: "1px solid #C7D2E8" }}>{pr.applicants}</td>
                             <td style={{ padding: "10px 14px", textAlign: "right", color: "var(--text)", fontWeight: 500,
-                                         borderRight: "1px solid rgba(0,45,105,0.1)" }}>{pr.passed}</td>
+                                         borderRight: "1px solid #C7D2E8" }}>{pr.passed}</td>
                             <td style={{ padding: "10px 14px", textAlign: "center", fontWeight: 700, color: rateColor(pr.rate) }}>
                               {pr.rate}
                             </td>
