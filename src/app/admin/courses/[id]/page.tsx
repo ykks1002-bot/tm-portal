@@ -4,13 +4,33 @@ import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
-  api,
+  api, ssKey,
   type ComparisonResponse,
   type StrengthPoint,
   type Script,
   type FAQ,
   type Competitor,
 } from "@/lib/api";
+
+const BASE_PATH_DATA = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+
+async function ssLoadFile<T>(file: string): Promise<T> {
+  const saved = localStorage.getItem(ssKey(file));
+  if (saved) return JSON.parse(saved) as T;
+  const res = await fetch(`${BASE_PATH_DATA}/data/${file}`);
+  return res.json() as T;
+}
+
+function ssSaveFile(file: string, data: unknown) {
+  localStorage.setItem(ssKey(file), JSON.stringify(data));
+}
+
+function ssNextId(): number {
+  const k = "tm_ss_next_id";
+  const n = parseInt(localStorage.getItem(k) ?? "10000") + 1;
+  localStorage.setItem(k, String(n));
+  return n;
+}
 
 type AdminTab = "comparison" | "strengths" | "scripts" | "faq";
 
@@ -56,12 +76,13 @@ function Btn({ onClick, children, variant = "primary" }: {
 
 // ── 비교표 편집 ────────────────────────────────────────────────────────────────
 function ComparisonEditor({
-  courseId, data, competitors, onRefresh,
+  courseId, data, competitors, onRefresh, staticMode,
 }: {
   courseId: number;
   data: ComparisonResponse;
   competitors: Competitor[];
   onRefresh: () => void;
+  staticMode?: boolean;
 }) {
   const [newItemName, setNewItemName] = useState("");
   const [newItemDesc, setNewItemDesc] = useState("");
@@ -71,6 +92,18 @@ function ComparisonEditor({
 
   const addItem = async () => {
     if (!newItemName) return;
+    if (staticMode) {
+      const file = `course-${courseId}-comparison.json`;
+      const cur = await ssLoadFile<ComparisonResponse>(file);
+      const newItem: ComparisonResponse["items"][0] = {
+        id: ssNextId(), name: newItemName, description: newItemDesc,
+        is_eduwill_advantage: isAdv, sort_order: cur.items.length + 1,
+        eduwill_value: "", competitor_values: {},
+      };
+      ssSaveFile(file, { ...cur, items: [...cur.items, newItem] });
+      setNewItemName(""); setNewItemDesc(""); setIsAdv(false);
+      onRefresh(); return;
+    }
     await api.createComparisonItem(courseId, {
       name: newItemName, description: newItemDesc, is_eduwill_advantage: isAdv, sort_order: data.items.length + 1,
     });
@@ -80,11 +113,23 @@ function ComparisonEditor({
 
   const deleteItem = async (id: number) => {
     if (!confirm("항목을 삭제하면 관련 비교 데이터도 모두 삭제됩니다. 계속하시겠습니까?")) return;
+    if (staticMode) {
+      const file = `course-${courseId}-comparison.json`;
+      const cur = await ssLoadFile<ComparisonResponse>(file);
+      ssSaveFile(file, { ...cur, items: cur.items.filter(i => i.id !== id) });
+      onRefresh(); return;
+    }
     await api.deleteComparisonItem(id);
     onRefresh();
   };
 
   const toggleAdv = async (item: ComparisonResponse["items"][0]) => {
+    if (staticMode) {
+      const file = `course-${courseId}-comparison.json`;
+      const cur = await ssLoadFile<ComparisonResponse>(file);
+      ssSaveFile(file, { ...cur, items: cur.items.map(i => i.id === item.id ? { ...i, is_eduwill_advantage: !i.is_eduwill_advantage } : i) });
+      onRefresh(); return;
+    }
     await api.updateComparisonItem(item.id, { is_eduwill_advantage: !item.is_eduwill_advantage });
     onRefresh();
   };
@@ -93,6 +138,19 @@ function ComparisonEditor({
     const key = `${itemId}_${competitorId ?? "eduwill"}`;
     const value = editingValues[key] ?? "";
     setSaving(itemId);
+    if (staticMode) {
+      const file = `course-${courseId}-comparison.json`;
+      const cur = await ssLoadFile<ComparisonResponse>(file);
+      ssSaveFile(file, {
+        ...cur,
+        items: cur.items.map(i => {
+          if (i.id !== itemId) return i;
+          if (competitorId === null) return { ...i, eduwill_value: value };
+          return { ...i, competitor_values: { ...i.competitor_values, [String(competitorId)]: value } };
+        }),
+      });
+      setSaving(null); onRefresh(); return;
+    }
     await api.upsertComparisonValue({ comparison_item_id: itemId, competitor_id: competitorId, value_text: value });
     setSaving(null);
     onRefresh();
@@ -188,8 +246,8 @@ function ComparisonEditor({
 }
 
 // ── 강점 편집 ────────────────────────────────────────────────────────────────
-function StrengthsEditor({ courseId, strengths, onRefresh }: {
-  courseId: number; strengths: StrengthPoint[]; onRefresh: () => void;
+function StrengthsEditor({ courseId, strengths, onRefresh, staticMode }: {
+  courseId: number; strengths: StrengthPoint[]; onRefresh: () => void; staticMode?: boolean;
 }) {
   const [cat, setCat] = useState(STRENGTH_CATS[0]);
   const [title, setTitle] = useState("");
@@ -198,6 +256,14 @@ function StrengthsEditor({ courseId, strengths, onRefresh }: {
 
   const add = async () => {
     if (!title) return;
+    if (staticMode) {
+      const file = `course-${courseId}-strengths.json`;
+      const cur = await ssLoadFile<StrengthPoint[]>(file);
+      const newItem: StrengthPoint = { id: ssNextId(), category: cat, title, description: desc, evidence_text: evidence, sort_order: cur.length + 1 };
+      ssSaveFile(file, [...cur, newItem]);
+      setTitle(""); setDesc(""); setEvidence("");
+      onRefresh(); return;
+    }
     await api.createStrength(courseId, { category: cat, title, description: desc, evidence_text: evidence, sort_order: strengths.length + 1 });
     setTitle(""); setDesc(""); setEvidence("");
     onRefresh();
@@ -205,6 +271,12 @@ function StrengthsEditor({ courseId, strengths, onRefresh }: {
 
   const del = async (id: number) => {
     if (!confirm("삭제하시겠습니까?")) return;
+    if (staticMode) {
+      const file = `course-${courseId}-strengths.json`;
+      const cur = await ssLoadFile<StrengthPoint[]>(file);
+      ssSaveFile(file, cur.filter(s => s.id !== id));
+      onRefresh(); return;
+    }
     await api.deleteStrength(id);
     onRefresh();
   };
@@ -244,8 +316,8 @@ function StrengthsEditor({ courseId, strengths, onRefresh }: {
 }
 
 // ── 스크립트 편집 ────────────────────────────────────────────────────────────
-function ScriptsEditor({ courseId, scripts, onRefresh }: {
-  courseId: number; scripts: Script[]; onRefresh: () => void;
+function ScriptsEditor({ courseId, scripts, onRefresh, staticMode }: {
+  courseId: number; scripts: Script[]; onRefresh: () => void; staticMode?: boolean;
 }) {
   const [tag, setTag] = useState(SITUATION_TAGS[0]);
   const [title, setTitle] = useState("");
@@ -253,6 +325,14 @@ function ScriptsEditor({ courseId, scripts, onRefresh }: {
 
   const add = async () => {
     if (!title || !body) return;
+    if (staticMode) {
+      const file = `course-${courseId}-scripts.json`;
+      const cur = await ssLoadFile<Script[]>(file);
+      const newItem: Script = { id: ssNextId(), situation_tag: tag, title, body_template: body, usage_count: 0 };
+      ssSaveFile(file, [...cur, newItem]);
+      setTitle(""); setBody("");
+      onRefresh(); return;
+    }
     await api.createScript(courseId, { situation_tag: tag, title, body_template: body });
     setTitle(""); setBody("");
     onRefresh();
@@ -260,6 +340,12 @@ function ScriptsEditor({ courseId, scripts, onRefresh }: {
 
   const del = async (id: number) => {
     if (!confirm("삭제하시겠습니까?")) return;
+    if (staticMode) {
+      const file = `course-${courseId}-scripts.json`;
+      const cur = await ssLoadFile<Script[]>(file);
+      ssSaveFile(file, cur.filter(s => s.id !== id));
+      onRefresh(); return;
+    }
     await api.deleteScript(id);
     onRefresh();
   };
@@ -305,8 +391,8 @@ function ScriptsEditor({ courseId, scripts, onRefresh }: {
 }
 
 // ── FAQ 편집 ────────────────────────────────────────────────────────────────
-function FAQEditor({ courseId, faqs, onRefresh }: {
-  courseId: number; faqs: FAQ[]; onRefresh: () => void;
+function FAQEditor({ courseId, faqs, onRefresh, staticMode }: {
+  courseId: number; faqs: FAQ[]; onRefresh: () => void; staticMode?: boolean;
 }) {
   const [q, setQ] = useState("");
   const [a, setA] = useState("");
@@ -314,6 +400,14 @@ function FAQEditor({ courseId, faqs, onRefresh }: {
 
   const add = async () => {
     if (!q || !a) return;
+    if (staticMode) {
+      const file = `course-${courseId}-faq.json`;
+      const cur = await ssLoadFile<FAQ[]>(file);
+      const newItem: FAQ = { id: ssNextId(), question: q, answer: a, objection_type: type || undefined, is_active: true };
+      ssSaveFile(file, [...cur, newItem]);
+      setQ(""); setA(""); setType("");
+      onRefresh(); return;
+    }
     await api.createFAQ(courseId, { question: q, answer: a, objection_type: type || undefined });
     setQ(""); setA(""); setType("");
     onRefresh();
@@ -321,6 +415,12 @@ function FAQEditor({ courseId, faqs, onRefresh }: {
 
   const del = async (id: number) => {
     if (!confirm("삭제하시겠습니까?")) return;
+    if (staticMode) {
+      const file = `course-${courseId}-faq.json`;
+      const cur = await ssLoadFile<FAQ[]>(file);
+      ssSaveFile(file, cur.filter(f => f.id !== id));
+      onRefresh(); return;
+    }
     await api.deleteFAQ(id);
     onRefresh();
   };
@@ -369,10 +469,15 @@ export default function AdminCoursePage({ params }: { params: Promise<{ id: stri
   const [faqs, setFaqs] = useState<FAQ[]>([]);
   const [competitors, setCompetitors] = useState<Competitor[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isStaticMode, setIsStaticMode] = useState(false);
+  const [exportMsg, setExportMsg] = useState("");
 
   useEffect(() => {
     const token = localStorage.getItem("tm_token");
     if (!token) { router.replace("/login"); return; }
+    const onGitHub = window.location.hostname.includes("github.io") || process.env.NEXT_PUBLIC_STATIC === "true";
+    const hasCustomUrl = !!localStorage.getItem("tm_custom_api_url");
+    setIsStaticMode(onGitHub && !hasCustomUrl);
     loadAll();
   }, [courseId, router]);
 
@@ -389,6 +494,33 @@ export default function AdminCoursePage({ params }: { params: Promise<{ id: stri
         setComparison(comp); setStrengths(str); setScripts(sc); setFaqs(fq); setCompetitors(comps);
       })
       .finally(() => setLoading(false));
+  };
+
+  const handleExport = () => {
+    const files = [
+      `course-${courseId}-comparison.json`,
+      `course-${courseId}-strengths.json`,
+      `course-${courseId}-scripts.json`,
+      `course-${courseId}-faq.json`,
+    ];
+    const modified = files.filter(f => localStorage.getItem(`tm_ss_${f}`));
+    if (modified.length === 0) { setExportMsg("변경된 데이터가 없습니다."); return; }
+    modified.forEach(file => {
+      const data = localStorage.getItem(`tm_ss_${file}`);
+      if (!data) return;
+      const blob = new Blob([JSON.stringify(JSON.parse(data), null, 2)], { type: "application/json" });
+      const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = file; a.click();
+    });
+    setExportMsg(`${modified.length}개 파일을 다운로드했습니다. GitHub public/data/에 업로드하세요.`);
+  };
+
+  const handleReset = () => {
+    if (!confirm("이 과목의 모든 로컬 변경사항을 초기화하시겠습니까?")) return;
+    [`course-${courseId}-comparison.json`, `course-${courseId}-strengths.json`,
+     `course-${courseId}-scripts.json`, `course-${courseId}-faq.json`]
+      .forEach(f => localStorage.removeItem(`tm_ss_${f}`));
+    loadAll();
+    setExportMsg("초기화되었습니다.");
   };
 
   if (loading || !comparison) {
@@ -424,7 +556,27 @@ export default function AdminCoursePage({ params }: { params: Promise<{ id: stri
               style={{ background: "var(--surface2)", color: "var(--text-muted)", border: "1px solid var(--border)" }}>
           미리보기 →
         </Link>
+        {isStaticMode && (
+          <div className="flex items-center gap-2 ml-2">
+            <button onClick={handleExport}
+                    className="text-xs px-3 py-1.5 rounded-lg font-medium"
+                    style={{ background: "rgba(34,197,94,0.15)", color: "#4ade80", border: "1px solid rgba(34,197,94,0.3)" }}>
+              JSON 내보내기
+            </button>
+            <button onClick={handleReset}
+                    className="text-xs px-3 py-1.5 rounded-lg"
+                    style={{ background: "rgba(239,68,68,0.1)", color: "var(--danger)", border: "1px solid rgba(239,68,68,0.25)" }}>
+              초기화
+            </button>
+          </div>
+        )}
       </header>
+      {isStaticMode && (
+        <div className="px-6 py-2 text-xs" style={{ background: "rgba(79,127,255,0.08)", color: "var(--accent)", borderBottom: "1px solid var(--border)" }}>
+          ℹ 정적 모드: 변경사항은 브라우저에 저장됩니다. &quot;JSON 내보내기&quot;로 다운로드 후 GitHub에 반영하세요.
+          {exportMsg && <span className="ml-3" style={{ color: "#4ade80" }}>{exportMsg}</span>}
+        </div>
+      )}
 
       <div style={{ background: "var(--surface)", borderBottom: "1px solid var(--border)" }}>
         <div className="max-w-5xl mx-auto px-6 flex">
@@ -443,16 +595,16 @@ export default function AdminCoursePage({ params }: { params: Promise<{ id: stri
 
       <main className="max-w-5xl mx-auto px-6 py-6">
         {tab === "comparison" && (
-          <ComparisonEditor courseId={courseId} data={comparison} competitors={competitors} onRefresh={loadAll} />
+          <ComparisonEditor courseId={courseId} data={comparison} competitors={competitors} onRefresh={loadAll} staticMode={isStaticMode} />
         )}
         {tab === "strengths" && (
-          <StrengthsEditor courseId={courseId} strengths={strengths} onRefresh={loadAll} />
+          <StrengthsEditor courseId={courseId} strengths={strengths} onRefresh={loadAll} staticMode={isStaticMode} />
         )}
         {tab === "scripts" && (
-          <ScriptsEditor courseId={courseId} scripts={scripts} onRefresh={loadAll} />
+          <ScriptsEditor courseId={courseId} scripts={scripts} onRefresh={loadAll} staticMode={isStaticMode} />
         )}
         {tab === "faq" && (
-          <FAQEditor courseId={courseId} faqs={faqs} onRefresh={loadAll} />
+          <FAQEditor courseId={courseId} faqs={faqs} onRefresh={loadAll} staticMode={isStaticMode} />
         )}
       </main>
     </div>

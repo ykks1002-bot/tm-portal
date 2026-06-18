@@ -1,0 +1,20 @@
+[
+  {"id": 1,  "name": "해커스",     "is_active": true},
+  {"id": 6,  "name": "박문각",     "is_active": true},
+  {"id": 7,  "name": "메가랜드",   "is_active": true},
+  {"id": 8,  "name": "합격의법학원","is_active": true},
+  {"id": 10, "name": "시대에듀",   "is_active": true},
+  {"id": 11, "name": "공단기",     "is_active": true},
+  {"id": 12, "name": "모아바",     "is_active": true},
+  {"id": 13, "name": "검스타트",   "is_active": true},
+  {"id": 14, "name": "다산에듀",   "is_active": true},
+  {"id": 15, "name": "에듀야",     "is_active": true},
+  {"id": 16, "name": "국자감",     "is_active": true},
+  {"id": 17, "name": "대산전기",   "is_active": true},
+  {"id": 18, "name": "성안당",     "is_active": true},
+  {"id": 19, "name": "배울학",     "is_active": true},
+  {"id": 20, "name": "넥스트공무원","is_active": true},
+  {"id": 21, "name": "유상통",     "is_active": true},
+  {"id": 22, "name": "지안에듀",   "is_active": true},
+  {"id": 23, "name": "계리단기",   "is_active": true}
+]

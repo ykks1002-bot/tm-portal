@@ -55,10 +55,22 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+// ── 정적 모드 로컬스토리지 헬퍼 ──────────────────────────────────────────────
+export const SS_PREFIX = "tm_ss_";
+export function ssKey(file: string): string { return SS_PREFIX + file; }
+
+export function ssListModified(): string[] {
+  if (typeof window === "undefined") return [];
+  return Object.keys(localStorage)
+    .filter(k => k.startsWith(SS_PREFIX))
+    .map(k => k.slice(SS_PREFIX.length));
+}
+
 // ── 정적 파일 요청 (GitHub Pages) ────────────────────────────────────────────
 function apiPathToDataFile(path: string): string {
   // /api/courses                     → courses.json
   // /api/promotions/active           → promotions.json
+  // /api/competitors                 → competitors.json
   // /api/courses/1/comparison        → course-1-comparison.json
   // /api/courses/1/strengths         → course-1-strengths.json
   // /api/courses/1/scripts           → course-1-scripts.json
@@ -66,6 +78,7 @@ function apiPathToDataFile(path: string): string {
   const p = path.replace(/^\/api\//, "");
   if (p === "courses") return "courses.json";
   if (p === "promotions/active") return "promotions.json";
+  if (p === "competitors") return "competitors.json";
   const m = p.match(/^courses\/(\d+)\/(comparison|strengths|scripts|faq)$/);
   if (m) return `course-${m[1]}-${m[2]}.json`;
   const me = p.match(/^courses\/(\d+)\/exam-schedules$/);
@@ -77,6 +90,8 @@ function apiPathToDataFile(path: string): string {
 
 async function staticRequest<T>(path: string): Promise<T> {
   const file = apiPathToDataFile(path);
+  const saved = typeof window !== "undefined" ? localStorage.getItem(ssKey(file)) : null;
+  if (saved) return JSON.parse(saved) as T;
   const res  = await fetch(`${BASE_PATH}/data/${file}`);
   if (!res.ok) throw new Error(`데이터 파일 없음: ${file}`);
   return res.json() as Promise<T>;
@@ -161,7 +176,7 @@ export const api = {
   deletePromotion: (id: number) => request(`/api/promotions/${id}`, { method: "DELETE" }),
 
   // Competitors
-  competitors: () => request<Competitor[]>("/api/competitors"),
+  competitors: () => get<Competitor[]>("/api/competitors"),
   createCompetitor: (name: string) =>
     request("/api/competitors", { method: "POST", body: JSON.stringify({ name }) }),
   deleteCompetitor: (id: number) => request(`/api/competitors/${id}`, { method: "DELETE" }),
