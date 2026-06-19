@@ -346,9 +346,15 @@ export default function AdminPricesPage() {
   const liveFiltered = rows.filter(r => (!filterCourse || r.course_name === filterCourse) && (!filterCompetitor || r.competitor_name === filterCompetitor));
   const staticFiltered = staticRows.filter(r => (!filterCourse || r.courseName === filterCourse) && (!filterCompetitor || r.competitorName === filterCompetitor));
   const liveCourses = [...new Set(rows.map(r => r.course_name))];
-  const liveCompetitors = [...new Set(rows.map(r => r.competitor_name))];
+  const liveCompetitors = [...new Set(
+    (filterCourse ? rows.filter(r => r.course_name === filterCourse) : rows)
+      .map(r => r.competitor_name)
+  )];
   const staticCourses = [...new Set(staticRows.map(r => r.courseName))];
-  const staticCompetitors = [...new Set(staticRows.map(r => r.competitorName))];
+  const staticCompetitors = [...new Set(
+    (filterCourse ? staticRows.filter(r => r.courseName === filterCourse) : staticRows)
+      .map(r => r.competitorName)
+  )];
   const pendingAlerts = alerts.filter(a => a.status === "pending");
 
   if (loading) {
@@ -426,7 +432,7 @@ export default function AdminPricesPage() {
         {isStaticMode && (
           <>
             <div className="flex gap-3 mb-4 flex-wrap">
-              <select value={filterCourse} onChange={e => setFilterCourse(e.target.value)}
+              <select value={filterCourse} onChange={e => { setFilterCourse(e.target.value); setFilterCompetitor(""); }}
                       className="text-sm px-3 py-2 rounded-lg outline-none"
                       style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }}>
                 <option value="">전체 과목</option>
@@ -472,7 +478,7 @@ export default function AdminPricesPage() {
         {!isStaticMode && tab === "prices" && (
           <>
             <div className="flex gap-3 mb-4 flex-wrap">
-              <select value={filterCourse} onChange={e => setFilterCourse(e.target.value)}
+              <select value={filterCourse} onChange={e => { setFilterCourse(e.target.value); setFilterCompetitor(""); }}
                       className="text-sm px-3 py-2 rounded-lg outline-none"
                       style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }}>
                 <option value="">전체 과목</option>
