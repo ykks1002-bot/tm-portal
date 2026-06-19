@@ -64,7 +64,7 @@ async function loadStaticPrices(): Promise<StaticPriceRow[]> {
   return rows;
 }
 
-async function saveStaticPrice(courseId: number, itemId: number, competitorId: number | null, valueText: string, description?: string) {
+async function saveStaticPrice(courseId: number, itemId: number, competitorId: number | null, valueText: string, description?: string, itemName?: string) {
   const file = `course-${courseId}-comparison.json`;
   const saved = localStorage.getItem(ssKey(file));
   const compData = saved ? JSON.parse(saved)
@@ -72,7 +72,12 @@ async function saveStaticPrice(courseId: number, itemId: number, competitorId: n
 
   compData.items = compData.items.map((item: Record<string, unknown>) => {
     if (item.id !== itemId) return item;
-    if (competitorId === null) return { ...item, eduwill_value: valueText, description: description ?? item.description };
+    if (competitorId === null) return {
+      ...item,
+      ...(itemName !== undefined ? { name: itemName } : {}),
+      eduwill_value: valueText,
+      description: description ?? item.description,
+    };
     return { ...item, competitor_values: { ...(item.competitor_values as Record<string, string>), [String(competitorId)]: valueText } };
   });
   localStorage.setItem(ssKey(file), JSON.stringify(compData));
@@ -84,15 +89,16 @@ function StaticPriceRowItem({ row, onSaved }: { row: StaticPriceRow; onSaved: (m
   const [editing, setEditing] = useState(false);
   const [val, setVal] = useState(row.valueText);
   const [desc, setDesc] = useState(row.description);
+  const [name, setName] = useState(row.itemName);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
 
-  const cancel = () => { setVal(row.valueText); setDesc(row.description); setEditing(false); setErr(""); };
+  const cancel = () => { setVal(row.valueText); setDesc(row.description); setName(row.itemName); setEditing(false); setErr(""); };
 
   const save = async () => {
     setSaving(true); setErr("");
     try {
-      await saveStaticPrice(row.courseId, row.itemId, row.competitorId, val, isEduwill ? desc : undefined);
+      await saveStaticPrice(row.courseId, row.itemId, row.competitorId, val, isEduwill ? desc : undefined, isEduwill ? name : undefined);
       setEditing(false);
       const file = `course-${row.courseId}-comparison.json`;
       const data = localStorage.getItem(ssKey(file));
@@ -127,12 +133,20 @@ function StaticPriceRowItem({ row, onSaved }: { row: StaticPriceRow; onSaved: (m
             <div className="flex gap-2">
               <div className="flex-1 flex flex-col gap-1.5">
                 {isEduwill && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs shrink-0" style={{ color: "var(--text-muted)", width: 28 }}>가격</span>
-                    <input value={desc} onChange={e => setDesc(e.target.value)} placeholder="예: 529,000원"
-                           className="flex-1 text-xs px-2 py-1.5 rounded-lg outline-none"
-                           style={{ border: "1.5px solid var(--accent)", background: "var(--surface2)", color: "var(--text)" }} />
-                  </div>
+                  <>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs shrink-0" style={{ color: "var(--text-muted)", width: 28 }}>상품명</span>
+                      <input value={name} onChange={e => setName(e.target.value)} placeholder="예: 평생패스 (1+2차)"
+                             className="flex-1 text-xs px-2 py-1.5 rounded-lg outline-none"
+                             style={{ border: "1.5px solid var(--accent)", background: "var(--surface2)", color: "var(--text)" }} />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs shrink-0" style={{ color: "var(--text-muted)", width: 28 }}>가격</span>
+                      <input value={desc} onChange={e => setDesc(e.target.value)} placeholder="예: 529,000원"
+                             className="flex-1 text-xs px-2 py-1.5 rounded-lg outline-none"
+                             style={{ border: "1.5px solid var(--accent)", background: "var(--surface2)", color: "var(--text)" }} />
+                    </div>
+                  </>
                 )}
                 <textarea value={val} onChange={e => setVal(e.target.value)}
                           rows={Math.max(3, val.split("\n").length + 1)}
